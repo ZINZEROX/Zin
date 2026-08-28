@@ -1,25 +1,6 @@
 --[[
-    Yin Yang - UI Ultimate Edition (v26.1)  SOUND BUG FIXED
-    ============================================================
-     ARREGLOS CRÍTICOS v26.1:
-    
-    1. FIX SONIDO GLOBAL: El slider ya NO reproduce sonido en inputs globales
-       - Eliminado playSound en InputChanged (línea 1508)
-       - Cambiado de UserInputService.InputEnded a SliderThumb.InputEnded
-       - El sonido SOLO se escucha al ajustar el slider, no en todo input de pantalla
-    
-    2. AHORA COMPATIBLE: Puedes jugar EVADE sin escuchar sonidos del slider
-    
-     CARACTERÍSTICAS ORIGINALES MANTENIDAS:
-    
-    1. LOGO YIN-YANG ROTATIVO: Logo animado que gira continuamente
-    2. SONIDOS INTEGRADOS:
-       - Click al activar/desactivar (138567614125924)
-       - Dragón aleatorio cuando está cerrado (7127123554) - cada 15 segundos, volumen reducido
-    3. TOGGLES FLOTANTES: 
-       - Pueden desprenderse de la UI principal
-       - Se pueden fijar (+) o soltar (-) 
-       - Se mueven libremente por la pantalla
+    Yin
+    ========================================================
 
 --// ══════════════════════════════════════════════════════════════════════════════
 --// GUÍA: CÓMO CREAR PESTAÑAS CON ASSETS (ICONOS)
@@ -453,7 +434,7 @@ LoadLanguageConfig()
 --// VARIABLE DE ESTADO: Freeze Icono
 local IconoCongelado = false
 
---//  SONIDOS DE CLICK PERSONALIZADOS POR TEMA (v26)
+--//  SONIDOS DE CLICK PERSONALIZADOS POR TEMA
 local ThemeClickSounds = {
     CatV1 = "rbxassetid://133371725828981",
     PinkV2 = "rbxassetid://136022651109523",
@@ -474,7 +455,7 @@ local ThemeClickSounds = {
 local CurrentClickSound = Sounds.Click
 local CurrentTheme = "Dark"
 
---//  v26: VARIABLE PARA ACTIVAR/DESACTIVAR SONIDOS PERSONALIZADOS
+--// VARIABLE PARA ACTIVAR/DESACTIVAR SONIDOS PERSONALIZADOS
 local DynamicClickSoundsEnabled = true  --  Cambiar a false para desactivar
 
 --//  SISTEMA RAINBOW DARK-WHITE: Cambia lentamente de negro a blanco
@@ -482,7 +463,7 @@ local RainbowDarkWhiteActive = false
 local RainbowDarkWhiteValue = 0
 local RainbowDarkWhiteLabels = {}
 
---// 🌙 LETRAS DE "CANTO DE LUNA" PARA TÍTULO ANIMADO (v26)
+--// 🌙 LETRAS DE "CANTO DE LUNA" PARA TÍTULO ANIMADO
 local CantoLunaLetras = {
     "Yin Yang",
     "Canto de Luna",
@@ -510,7 +491,7 @@ local RainbowColors = {
     Color3.fromRGB(255, 255, 255),    -- BLANCO ⭐
 }
 
---//  COLORES DE BORDE ANIMADO PARA FLOATING TOGGLES (v26.1 PREMIUM)
+--//  COLORES DE BORDE ANIMADO PARA FLOATING TOGGLES (PREMIUM)
 local FloatingToggleBorderColors = {
     -- DARK THEMES (Azules y Cian)
     Dark = {
@@ -647,7 +628,7 @@ local FloatingToggleBorderColors = {
     },
 }
 
---// 💾 SISTEMA DE GUARDADO/PERSISTENCIA (v26 - MEJORADO)
+--// 💾 SISTEMA DE GUARDADO/PERSISTENCIA ( - MEJORADO)
 local ConfigFile = "Yin_Yang_Config.txt"
 local SavedConfig = {
     CurrentTheme = "Dark",
@@ -776,7 +757,7 @@ end
 local function playSound(soundId, volume)
     volume = volume or 0.5
     
-    --//  v26: USAR SONIDO DINÁMICO SI ESTÁ ACTIVADO
+    --// USAR SONIDO DINÁMICO SI ESTÁ ACTIVADO
     local finalSoundId = soundId
     
     -- Si sonidos dinámicos están activados, ignorar Sounds.Click y usar el del tema
@@ -3505,6 +3486,19 @@ function YinYang:CreateWindow(title_text, startTheme)
     }, Body)
     mk("UIPadding", {PaddingTop = UDim.new(0, 0), PaddingLeft = UDim.new(0, 0), PaddingRight = UDim.new(0, 0), PaddingBottom = UDim.new(0, 0)}, ContentArea)
 
+    --// Window debe existir antes de inicializar el rail compacto, porque este registra
+    --// sus métodos de refresco y las tabs creadas posteriormente los reutilizan.
+    local Window = setmetatable({}, ZeroUI)
+    Window.Tabs = {}
+    Window.Assets = Assets
+    Window.CurrentTheme = startTheme
+    Window.AllThemes = ThemePalettes
+    Window.FloatingToggles = {}
+    Window.Keybinds = {}
+    Window._keybindCapture = nil
+    Window.ScreenGui = ScreenGui
+    Window.BackgroundArt = nil
+
     --// NAVEGACIÓN COMPACTA: rail de iconos que reutiliza Tab.Select y registra tabs externas.
     --// No reemplaza TabList: la flecha alterna entre este rail y las pestañas normales.
     ;(function()
@@ -3647,6 +3641,7 @@ function YinYang:CreateWindow(title_text, startTheme)
         ZIndex = 5
     })
     corner(BackgroundArt, 8)
+    Window.BackgroundArt = BackgroundArt
 
     --// VideoFrame opcional: queda detrás del contenido y se muestra solo cuando
     --// el asset termina de cargar. Si no existe o falla, BackgroundArt permanece visible.
@@ -3727,17 +3722,6 @@ function YinYang:CreateWindow(title_text, startTheme)
             end
         end)
     end
-
-    local Window = setmetatable({}, ZeroUI)
-    Window.Tabs = {}
-    Window.Assets = Assets
-    Window.CurrentTheme = startTheme
-    Window.AllThemes = ThemePalettes
-    Window.FloatingToggles = {}
-    Window.Keybinds = {}
-    Window._keybindCapture = nil
-    Window.ScreenGui = ScreenGui
-    Window.BackgroundArt = BackgroundArt
 
     local function keyNameToDisplay(keyName)
         if type(keyName) ~= "string" or keyName == "" then
@@ -7593,7 +7577,7 @@ function YinYang:CreateWindow(title_text, startTheme)
     end
 
     --// ════════════════════════════════════════════════════════════════
-    --// CREAR AUTOMÁTICAMENTE LAS 3 PESTAÑAS SAGRADAS (v26 MEJORADO)
+    --// CREAR AUTOMÁTICAMENTE LAS 3 PESTAÑAS SAGRADAS MEJORADO)
     --// ════════════════════════════════════════════════════════════════
     
     -- TAB 1: INICIO (Automático)
@@ -16458,7 +16442,7 @@ if DEMO_ACTIVO then
     print("INICIANDO DEMO VISUAL DE YIN YANG v24 - LIBRERÍA PROFESIONAL")
     print(string.rep("=", 60))
     
-    --// 💾 v26: CARGAR CONFIGURACIÓN GUARDADA AL INICIAR
+    --// CARGAR CONFIGURACIÓN GUARDADA AL INICIAR
     local ConfigCargada = LoadConfig()
     local TemaInicial = "Dark"
     if ConfigCargada and ConfigCargada.theme then
@@ -16469,7 +16453,7 @@ if DEMO_ACTIVO then
         LanguageSystem.Config.Language = ConfigCargada.lang
     end
 
-    local DemoUI = _G.YinYang:CreateWindow("Yin Yang - DEMO v26", TemaInicial)
+    local DemoUI = _G.YinYang:CreateWindow("Yin Yang - DEMO v6",TemaInicial)
     
     --//  APLICAR TEMA GUARDADO - Re-pinta TODOS los colores, no solo la variable
     DemoUI:SetTheme(TemaInicial)
