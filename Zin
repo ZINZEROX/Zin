@@ -1,6 +1,5 @@
 --[[
-    Yin
-    ========================================================
+ ========================================================
 
 --// ══════════════════════════════════════════════════════════════════════════════
 --// GUÍA: CÓMO CREAR PESTAÑAS CON ASSETS (ICONOS)
@@ -222,12 +221,11 @@ local LanguageTranslations = {
     ["El ID de sonido no es válido.|The sound ID is invalid."] = { vi = "ID âm thanh không hợp lệ.", pt = "O ID do som é inválido." },
     ["muestra del efecto|effect sample"] = { vi = "mẫu hiệu ứng", pt = "amostra do efeito" },
     ["ACTIVO|ACTIVE"] = { vi = "ĐANG BẬT", pt = "ATIVO" },
-    ["Traducir|Translate"] = { vi = "Dịch", pt = "Traduzir" },
-    ["Ocultar traducción|Hide translation"] = { vi = "Ẩn bản dịch", pt = "Ocultar tradução" },
-    ["Traduciendo...|Translating..."] = { vi = "Đang dịch...", pt = "Traduzindo..." },
-    ["Ya estaba en este idioma|Already in this language"] = { vi = "Đã ở ngôn ngữ này", pt = "Já está neste idioma" },
-    ["Error, reintentar|Error, retry"] = { vi = "Lỗi, thử lại", pt = "Erro, tentar novamente" },
     ["Global Chat|Global Chat"] = { vi = "Chat toàn cầu", pt = "Chat global" },
+    ["Buscador global|Global search"] = { vi = "Tìm kiếm toàn cục", pt = "Busca global" },
+    ["Buscar una función...|Search a feature..."] = { vi = "Tìm một tính năng...", pt = "Buscar um recurso..." },
+    ["Escribe para buscar una función|Type to search for a feature"] = { vi = "Nhập để tìm một tính năng", pt = "Digite para buscar um recurso" },
+    ["No se encontró ninguna función|No feature found"] = { vi = "Không tìm thấy tính năng nào", pt = "Nenhum recurso encontrado" },
     ["Escribir...|Type..."] = { vi = "Nhập...", pt = "Digite..." },
     ["Stickers|Stickers"] = { vi = "Nhãn dán", pt = "Stickers" },
     ["Mis Stickers|My Stickers"] = { vi = "Nhãn dán của tôi", pt = "Meus stickers" },
@@ -639,6 +637,7 @@ local SavedConfig = {
     SelectedLogoIcon = "ClassicYinYang",
     PlatformMode = "Auto",   -- "Auto" | "PC" | "Mobile"
     FloatingToggleStyle = "Pill",  -- "Pill" (rectangular actual) | "Circle" (nuevo, redondo)
+    ChatCornerMessages = true,
     Keybinds = {},             -- id "NombrePestaña::NombreOpción" -> Enum.KeyCode.Name
 }
 
@@ -664,6 +663,7 @@ local function SaveConfig()
             "logoIcon:" .. tostring(SavedConfig.SelectedLogoIcon or "ClassicYinYang"),
             "platformMode:" .. tostring(SavedConfig.PlatformMode or "Auto"),
             "floatStyle:" .. tostring(SavedConfig.FloatingToggleStyle or "Pill"),
+            "chatCorner:" .. tostring(SavedConfig.ChatCornerMessages ~= false),
             "keybinds:" .. table.concat(keybindParts, ","),
             "time:" .. tostring(os.time()),
         }, "|")
@@ -684,6 +684,7 @@ local function LoadConfig()
         logoIcon = nil,
         platformMode = nil,
         floatStyle = nil,
+        chatCorner = nil,
         keybinds = {},
     }
 
@@ -715,6 +716,8 @@ local function LoadConfig()
                         result.platformMode = value
                     elseif key == "floatStyle" then
                         result.floatStyle = value
+                    elseif key == "chatCorner" then
+                        result.chatCorner = (value == "true")
                     elseif key == "keybinds" then
                         for pair in value:gmatch("([^,]+)") do
                             local id, keyName = pair:match("^(.-)~([^~]+)$")
@@ -2008,7 +2011,7 @@ setActiveTheme("Dark")
 --// AJUSTES EXTRAÍDOS: mantiene la lógica de Ajustes fuera de CreateWindow.
 --// Los getters/setters de SlidersHidden conservan el estado local que usa
 --// CreateSlider sin acoplar esta función al scope de CreateWindow.
-local function BuildAjustesExtras(Window, AutoTabAjustes, getSlidersHidden, setSlidersHidden)
+local function BuildAjustesExtras(Window, AutoTabAjustes, getSlidersHidden, setSlidersHidden, getChatCornerMessagesEnabled, setChatCornerMessagesEnabled)
     AutoTabAjustes:CreateToggle("Freeze Icono", "Freeze Icon", false, function(state)
         IconoCongelado = state
         if Window.Dragon and Window.Dragon.Draggable then
@@ -2020,6 +2023,19 @@ local function BuildAjustesExtras(Window, AutoTabAjustes, getSlidersHidden, setS
     end)
 
     --// ════════════════════════════════════════════════════════════════
+    AutoTabAjustes:CreateDivider()
+    AutoTabAjustes:CreateLabel("Chat", "Chat", 12)
+    AutoTabAjustes:CreateToggle(
+        "Mensajes del Chat en esquina",
+        "Chat Corner Messages",
+        getChatCornerMessagesEnabled(),
+        function(state)
+            setChatCornerMessagesEnabled(state)
+            SavedConfig.ChatCornerMessages = state
+            SaveConfig()
+        end
+    )
+
     AutoTabAjustes:CreateDivider()
     AutoTabAjustes:CreateLabel("Sonidos", "Sounds", 12)
     AutoTabAjustes:CreateToggle("Sonidos Dinámicos", "Dynamic Sounds", DynamicClickSoundsEnabled, function(state)
@@ -2228,6 +2244,9 @@ function YinYang:CreateWindow(title_text, startTheme)
         end
         if ConfigCargada.floatStyle then
             SavedConfig.FloatingToggleStyle = ConfigCargada.floatStyle
+        end
+        if ConfigCargada.chatCorner ~= nil then
+            SavedConfig.ChatCornerMessages = ConfigCargada.chatCorner
         end
         if ConfigCargada.keybinds then
             SavedConfig.Keybinds = ConfigCargada.keybinds
@@ -3318,7 +3337,7 @@ function YinYang:CreateWindow(title_text, startTheme)
         Name = "WindowControls",
         AnchorPoint = Vector2.new(1, 0.5),
         Position = UDim2.new(1, -8, 0.5, 0),
-        Size = UDim2.fromOffset(100, 32),
+        Size = UDim2.fromOffset(132, 32),
         BackgroundTransparency = 1,
         ZIndex = 50,
     }, TopBar)
@@ -3360,9 +3379,378 @@ function YinYang:CreateWindow(title_text, startTheme)
         return button
     end
 
+
+    local Window
+
+    local GlobalSearch = {}
+    GlobalSearch.Button = createWindowControl("GlobalSearch", 83456197177232, 0, "Buscar")
+    GlobalSearch.Button.Size = UDim2.fromOffset(22, 22)
     local MinimizeButton = createWindowControl("Minimize", 118609364031074, 1, "Minimizar")
     local MaximizeButton = createWindowControl("Maximize", 109433688231575, 2, "Pantalla completa")
     local CloseButton = createWindowControl("Close", 104161431521816, 3, "Cerrar")
+
+    GlobalSearch.Overlay = mk("Frame", {
+        Name = "GlobalSearch.Overlay",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        Visible = false,
+        ZIndex = 1000,
+    }, ScreenGui)
+
+    GlobalSearch.Backdrop = mk("TextButton", {
+        Size = UDim2.fromScale(1, 1),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.42,
+        Text = "",
+        AutoButtonColor = false,
+        ZIndex = 1000,
+    }, GlobalSearch.Overlay)
+
+    GlobalSearch.Panel = mk("Frame", {
+        AnchorPoint = Vector2.new(0.5, 0.5),
+        Position = UDim2.fromScale(0.5, 0.5),
+        Size = UDim2.fromOffset(500, 500),
+        BackgroundColor3 = Theme.Background,
+        ZIndex = 1001,
+    }, GlobalSearch.Overlay)
+    GlobalSearch.Panel:SetAttribute("ThemeRole", "Background")
+    corner(GlobalSearch.Panel, 12)
+    stroke(GlobalSearch.Panel, Theme.Stroke, 1.5, 0.28)
+
+    GlobalSearch.Accent = mk("Frame", {
+        Parent = GlobalSearch.Panel,
+        Size = UDim2.new(1, -40, 0, 2),
+        Position = UDim2.fromOffset(20, 58),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        ZIndex = 1003,
+    })
+    corner(GlobalSearch.Accent, 999)
+    GlobalSearch.Accent:SetAttribute("ThemeRole", "Accent")
+
+    GlobalSearch.Icon = mk("ImageLabel", {
+        Parent = GlobalSearch.Panel,
+        Size = UDim2.fromOffset(24, 24),
+        Position = UDim2.fromOffset(20, 16),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://83456197177232",
+        ImageColor3 = Theme.Accent,
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 1003,
+    })
+    GlobalSearch.Icon:SetAttribute("ThemeImageRole", "Accent")
+
+    GlobalSearch.Title = mk("TextLabel", {
+        Parent = GlobalSearch.Panel,
+        Size = UDim2.new(1, -88, 0, 24),
+        Position = UDim2.fromOffset(52, 11),
+        BackgroundTransparency = 1,
+        Text = GetText("Buscar en Yin Yang", "Search Yin Yang"),
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.GothamBlack,
+        TextSize = 17,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 1002,
+    })
+    GlobalSearch.Title:SetAttribute("ThemeTextRole", "Text")
+
+    GlobalSearch.Subtitle = mk("TextLabel", {
+        Parent = GlobalSearch.Panel,
+        Size = UDim2.new(1, -88, 0, 17),
+        Position = UDim2.fromOffset(52, 33),
+        BackgroundTransparency = 1,
+        Text = GetText("Encuentra cualquier función rápidamente", "Find any feature quickly"),
+        TextColor3 = Theme.TextDim,
+        Font = Enum.Font.Gotham,
+        TextSize = 10,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ZIndex = 1002,
+    })
+    GlobalSearch.Subtitle:SetAttribute("ThemeTextRole", "TextDim")
+
+    GlobalSearch.Close = mk("TextButton", {
+        Parent = GlobalSearch.Panel,
+        Size = UDim2.fromOffset(30, 30),
+        Position = UDim2.new(1, -42, 0, 10),
+        BackgroundColor3 = Theme.Secondary,
+        BackgroundTransparency = 0.15,
+        Text = "×",
+        TextColor3 = Theme.TextDim,
+        Font = Enum.Font.GothamBold,
+        TextSize = 20,
+        AutoButtonColor = false,
+        ZIndex = 1004,
+    })
+    GlobalSearch.Close:SetAttribute("ThemeRole", "Secondary")
+    corner(GlobalSearch.Close, 8)
+    stroke(GlobalSearch.Close, Theme.Stroke, 1, 0.65)
+
+    GlobalSearch.Holder = mk("Frame", {
+        Parent = GlobalSearch.Panel,
+        Size = UDim2.new(1, -40, 0, 48),
+        Position = UDim2.fromOffset(20, 74),
+        BackgroundColor3 = Theme.Secondary,
+        BackgroundTransparency = 0.08,
+        ZIndex = 1002,
+    })
+    GlobalSearch.Holder:SetAttribute("ThemeRole", "Secondary")
+    corner(GlobalSearch.Holder, 9)
+    stroke(GlobalSearch.Holder, Theme.Stroke, 1, 0.48)
+
+    mk("ImageLabel", {
+        Parent = GlobalSearch.Holder,
+        Size = UDim2.fromOffset(19, 19),
+        Position = UDim2.fromOffset(12, 12),
+        BackgroundTransparency = 1,
+        Image = "rbxassetid://83456197177232",
+        ImageColor3 = Theme.TextDim,
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 1003,
+    })
+
+    GlobalSearch.Box = mk("TextBox", {
+        Parent = GlobalSearch.Holder,
+        Size = UDim2.new(1, -54, 1, 0),
+        Position = UDim2.fromOffset(46, 0),
+        BackgroundTransparency = 1,
+        Text = "",
+        PlaceholderText = GetText("Buscar una función...", "Search a feature..."),
+        PlaceholderColor3 = Theme.TextDim,
+        TextColor3 = Theme.Text,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 13,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        ClearTextOnFocus = false,
+        ZIndex = 1003,
+    })
+    GlobalSearch.Box:SetAttribute("ThemeTextRole", "Text")
+
+    GlobalSearch.Results = mk("ScrollingFrame", {
+        Parent = GlobalSearch.Panel,
+        Size = UDim2.new(1, -40, 1, -138),
+        Position = UDim2.fromOffset(20, 134),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 2,
+        ScrollBarImageColor3 = Theme.Accent,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ZIndex = 1002,
+    }, GlobalSearch.Panel)
+    mk("UIListLayout", {
+        Padding = UDim.new(0, 7),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, GlobalSearch.Results)
+
+    GlobalSearch.Empty = mk("TextLabel", {
+        Parent = GlobalSearch.Results,
+        Size = UDim2.new(1, 0, 0, 100),
+        BackgroundTransparency = 1,
+        Text = GetText("Escribe para buscar una función", "Type to search for a feature"),
+        TextColor3 = Theme.TextDim,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 12,
+        TextXAlignment = Enum.TextXAlignment.Center,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        ZIndex = 1003,
+    })
+    GlobalSearch.Empty:SetAttribute("ThemeTextRole", "TextDim")
+
+    GlobalSearch.Open = false
+
+    function GlobalSearch.UpdateSize()
+        local viewport = ScreenGui.AbsoluteSize
+        if viewport.X <= 0 or viewport.Y <= 0 then return end
+        local width = math.min(500, math.max(290, viewport.X - 24))
+        local height = math.min(500, math.max(300, viewport.Y - 24))
+        GlobalSearch.Panel.Size = UDim2.fromOffset(width, height)
+    end
+    track(ScreenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(GlobalSearch.UpdateSize))
+    GlobalSearch.UpdateSize()
+
+    function GlobalSearch.ClearResults()
+        for _, child in ipairs(GlobalSearch.Results:GetChildren()) do
+            if child:IsA("GuiButton") then
+                child:Destroy()
+            end
+        end
+    end
+
+    function GlobalSearch.Refresh()
+        GlobalSearch.ClearResults()
+        local query = string.lower((GlobalSearch.Box.Text or ""):gsub("^%s+", ""):gsub("%s+$", ""))
+        if query == "" then
+            GlobalSearch.Empty.Text = GetText("Escribe para buscar una función", "Type to search for a feature")
+            GlobalSearch.Empty.Visible = true
+            return
+        end
+
+        local matches = {}
+        for _, entry in ipairs(Window._GlobalOptionRegistry or {}) do
+            local nameES = string.lower(tostring(entry.NameSpanish or ""))
+            local nameEN = string.lower(tostring(entry.NameEnglish or ""))
+            local tabES = string.lower(tostring(entry.Tab and entry.Tab.NameSpanish or ""))
+            local tabEN = string.lower(tostring(entry.Tab and entry.Tab.NameEnglish or ""))
+            local score = nil
+            for _, value in ipairs({nameES, nameEN, tabES, tabEN}) do
+                if value ~= "" then
+                    local found = string.find(value, query, 1, true)
+                    if found then
+                        local candidate = found == 1 and 0 or 1
+                        score = score == nil and candidate or math.min(score, candidate)
+                    end
+                end
+            end
+            if score ~= nil then
+                table.insert(matches, {entry = entry, score = score})
+            end
+        end
+
+        table.sort(matches, function(a, b)
+            if a.score ~= b.score then return a.score < b.score end
+            return string.lower(tostring(a.entry.NameSpanish or "")) < string.lower(tostring(b.entry.NameSpanish or ""))
+        end)
+
+        GlobalSearch.Empty.Visible = #matches == 0
+        if #matches == 0 then
+            GlobalSearch.Empty.Text = GetText("No encontramos esa función", "No matching feature found")
+            return
+        end
+
+        for index = 1, math.min(#matches, 20) do
+            local entry = matches[index].entry
+            local result = mk("TextButton", {
+                Parent = GlobalSearch.Results,
+                Size = UDim2.new(1, -4, 0, 62),
+                BackgroundColor3 = Theme.Secondary,
+                BackgroundTransparency = 0.12,
+                Text = "",
+                AutoButtonColor = false,
+                LayoutOrder = index,
+                ZIndex = 1003,
+            })
+            result:SetAttribute("ThemeRole", "Secondary")
+            corner(result, 9)
+            stroke(result, Theme.Stroke, 1, 0.62)
+
+            local resultIconFrame = mk("Frame", {
+                Parent = result,
+                Size = UDim2.fromOffset(38, 38),
+                Position = UDim2.fromOffset(10, 12),
+                BackgroundColor3 = Theme.Background,
+                BackgroundTransparency = 0.10,
+                BorderSizePixel = 0,
+                ZIndex = 1004,
+            })
+            resultIconFrame:SetAttribute("ThemeRole", "Background")
+            corner(resultIconFrame, 10)
+            stroke(resultIconFrame, Theme.Stroke, 1, 0.68)
+
+            local resultIcon = mk("ImageLabel", {
+                Parent = resultIconFrame,
+                Size = UDim2.fromOffset(20, 20),
+                Position = UDim2.fromOffset(9, 9),
+                BackgroundTransparency = 1,
+                Image = entry.Icon or (entry.Tab and entry.Tab.IconAsset) or "rbxassetid://83456197177232",
+                ImageColor3 = Theme.Text,
+                ScaleType = Enum.ScaleType.Fit,
+                ZIndex = 1005,
+            })
+
+            local resultTitle = mk("TextLabel", {
+                Parent = result,
+                Size = UDim2.new(1, -116, 0, 22),
+                Position = UDim2.fromOffset(60, 8),
+                BackgroundTransparency = 1,
+                Text = GetText(entry.NameSpanish, entry.NameEnglish),
+                TextColor3 = Theme.Text,
+                Font = Enum.Font.GothamBold,
+                TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                ZIndex = 1004,
+            })
+            resultTitle:SetAttribute("ThemeTextRole", "Text")
+
+            local tabName = entry.Tab and GetText(entry.Tab.NameSpanish, entry.Tab.NameEnglish) or GetText("General", "General")
+            local resultMeta = mk("TextLabel", {
+                Parent = result,
+                Size = UDim2.new(1, -116, 0, 16),
+                Position = UDim2.fromOffset(60, 32),
+                BackgroundTransparency = 1,
+                Text = tabName .. "  ·  " .. tostring(entry.Kind or "Feature"),
+                TextColor3 = Theme.TextDim,
+                Font = Enum.Font.Gotham,
+                TextSize = 10,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                ZIndex = 1004,
+            })
+            resultMeta:SetAttribute("ThemeTextRole", "TextDim")
+
+            local resultArrow = mk("TextLabel", {
+                Parent = result,
+                Size = UDim2.fromOffset(30, 62),
+                Position = UDim2.new(1, -38, 0, 0),
+                BackgroundTransparency = 1,
+                Text = "›",
+                TextColor3 = Theme.TextDim,
+                Font = Enum.Font.GothamBold,
+                TextSize = 24,
+                TextXAlignment = Enum.TextXAlignment.Center,
+                TextYAlignment = Enum.TextYAlignment.Center,
+                ZIndex = 1004,
+            })
+            resultArrow:SetAttribute("ThemeTextRole", "TextDim")
+
+            result.MouseEnter:Connect(function()
+                TweenService:Create(result, TweenInfo.new(0.12), {BackgroundTransparency = 0.02}):Play()
+                TweenService:Create(resultArrow, TweenInfo.new(0.12), {TextColor3 = Theme.Accent}):Play()
+            end)
+            result.MouseLeave:Connect(function()
+                TweenService:Create(result, TweenInfo.new(0.15), {BackgroundTransparency = 0.12}):Play()
+                TweenService:Create(resultArrow, TweenInfo.new(0.15), {TextColor3 = Theme.TextDim}):Play()
+            end)
+            result.MouseButton1Click:Connect(function()
+                if entry.Tab and entry.Tab.Select then
+                    GlobalSearch.SetOpen(false)
+                    entry.Tab.Select()
+                    task.defer(function()
+                        if entry.Holder and entry.Holder.Parent and entry.Tab.Page then
+                            local y = entry.Holder.AbsolutePosition.Y - entry.Tab.Page.AbsolutePosition.Y + entry.Tab.Page.CanvasPosition.Y - 8
+                            entry.Tab.Page.CanvasPosition = Vector2.new(0, math.max(0, y))
+                        end
+                    end)
+                end
+            end)
+        end
+    end
+
+    function GlobalSearch.SetOpen(open)
+        GlobalSearch.Open = open
+        GlobalSearch.Overlay.Visible = open
+        if open then
+            GlobalSearch.UpdateSize()
+            GlobalSearch.Refresh()
+            task.defer(function()
+                pcall(function() GlobalSearch.Box:CaptureFocus() end)
+            end)
+        else
+            GlobalSearch.Box:ReleaseFocus()
+        end
+    end
+
+    GlobalSearch.Backdrop.MouseButton1Click:Connect(function()
+        GlobalSearch.SetOpen(false)
+    end)
+    GlobalSearch.Close.MouseButton1Click:Connect(function()
+        GlobalSearch.SetOpen(false)
+    end)
+    GlobalSearch.Box:GetPropertyChangedSignal("Text"):Connect(GlobalSearch.Refresh)
+    GlobalSearch.Button.MouseButton1Click:Connect(function()
+        playSound(Sounds.Click, 0.6)
+        GlobalSearch.SetOpen(not GlobalSearch.Open)
+    end)
 
     MinimizeButton.MouseButton1Click:Connect(function()
         playSound(Sounds.Click, 0.6)
@@ -3488,7 +3876,7 @@ function YinYang:CreateWindow(title_text, startTheme)
 
     --// Window debe existir antes de inicializar el rail compacto, porque este registra
     --// sus métodos de refresco y las tabs creadas posteriormente los reutilizan.
-    local Window = setmetatable({}, ZeroUI)
+    Window = setmetatable({}, ZeroUI)
     Window.Tabs = {}
     Window.Assets = Assets
     Window.CurrentTheme = startTheme
@@ -3498,6 +3886,79 @@ function YinYang:CreateWindow(title_text, startTheme)
     Window._keybindCapture = nil
     Window.ScreenGui = ScreenGui
     Window.BackgroundArt = nil
+
+    --// REGISTRO GLOBAL DE OPCIONES — una sola referencia por control original.
+    --// Se usa tanto para el buscador global como para accesos directos futuros,
+    --// sin duplicar controles ni ejecutar callbacks desde copias.
+    Window._GlobalOptionRegistry = {}
+    function Window._RegisterGlobalOption(tab, data)
+        if type(data) ~= "table" or not tab or not data.Holder then return end
+        data.Tab = tab
+        table.insert(Window._GlobalOptionRegistry, data)
+    end
+
+
+
+    --// CONTROLES DE FAVORITO PARA OPCIONES FLOTANTES.
+    --// El espejo usa los mismos botones del control original, así que no crea
+    --// una segunda ventana flotante ni un segundo estado de candado.
+    function Window._AddFavoriteFloatControls(holder, toggleFloating, toggleLock, getFloating, getLocked, onRefresh)
+        if not holder or type(toggleFloating) ~= "function" or type(toggleLock) ~= "function" then return end
+
+        holder.Size = UDim2.new(1, 0, 0, 92)
+
+        local FloatBtn = mk("TextButton", {
+            Parent = holder,
+            Size = UDim2.fromOffset(26, 26),
+            Position = UDim2.new(1, -126, 0, 19),
+            BackgroundColor3 = Theme.Accent,
+            Text = "↗",
+            TextColor3 = Color3.fromRGB(0, 0, 0),
+            Font = Enum.Font.GothamBold,
+            TextSize = 13,
+            AutoButtonColor = false,
+            ZIndex = 15,
+        })
+        corner(FloatBtn, 6)
+
+        local LockBtn = mk("ImageButton", {
+            Parent = holder,
+            Size = UDim2.fromOffset(26, 26),
+            Position = UDim2.new(1, -96, 0, 19),
+            BackgroundColor3 = Theme.Secondary,
+            Image = "rbxassetid://83537941312438",
+            ImageColor3 = Theme.Text,
+            ScaleType = Enum.ScaleType.Stretch,
+            AutoButtonColor = false,
+            ZIndex = 15,
+        })
+        corner(LockBtn, 6)
+        stroke(LockBtn, Theme.Stroke, 1, 0.5)
+
+        local function refresh()
+            local floating = false
+            local locked = false
+            pcall(function() floating = getFloating() end)
+            pcall(function() locked = getLocked() end)
+            FloatBtn.Text = floating and "←" or "↗"
+            LockBtn.Image = locked and "rbxassetid://91959170037380" or "rbxassetid://83537941312438"
+        end
+
+        FloatBtn.MouseButton1Click:Connect(function()
+            playSound(Sounds.Click, 0.6)
+            pcall(toggleFloating)
+            refresh()
+        end)
+        LockBtn.MouseButton1Click:Connect(function()
+            playSound(Sounds.Click, 0.5)
+            pcall(toggleLock)
+            refresh()
+        end)
+        refresh()
+        if type(onRefresh) == "function" then
+            pcall(onRefresh, refresh)
+        end
+    end
 
     --// NAVEGACIÓN COMPACTA: rail de iconos que reutiliza Tab.Select y registra tabs externas.
     --// No reemplaza TabList: la flecha alterna entre este rail y las pestañas normales.
@@ -4296,8 +4757,11 @@ function YinYang:CreateWindow(title_text, startTheme)
             local _linkedSliderRef    = nil
             local _linkedSliderFavRow = nil
             local favRow = nil
+            local toggleFloating
+            local toggleLock
 
             local function syncFavoriteRow()
+                favoriteControlRefreshers = {}
                 --// Limpiar toggle en Favoritos
                 if favRow then
                     pcall(function() favRow.Holder:Destroy() end)
@@ -4315,7 +4779,13 @@ function YinYang:CreateWindow(title_text, startTheme)
                         state = newState
                         tog.SetValue(newState)
                         pcall(cb, newState)
-                    end)
+                    end, true)
+                    Window._AddFavoriteFloatControls(
+                        favRow.Holder, toggleFloating, toggleLock,
+                        function() return isFloating end,
+                        function() return isLocked end,
+                        function(refresh) table.insert(favoriteControlRefreshers, refresh) end
+                    )
 
                     --// ✅ Slider vinculado: si existe, aparece justo debajo en Favoritos
                     if _linkedSliderRef then
@@ -4334,7 +4804,6 @@ function YinYang:CreateWindow(title_text, startTheme)
                     end
                 end
             end
-            syncFavoriteRow()
 
             FavBtn.MouseButton1Click:Connect(function()
                 playSound(Sounds.Click, 0.5)
@@ -4386,6 +4855,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             local FloatingWindow = nil
             local FloatingGlow = nil
             local animationConnection = nil
+            local favoriteControlRefreshers = {}
             
             local function createFloatingWindow()
 
@@ -4588,7 +5058,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// BOTÓN DESPRENDER EN PESTAÑA
             --// ═════════════════════════════════════════════════════════════════════════
             
-            DetachBtn.MouseButton1Click:Connect(function()
+            toggleFloating = function()
                 playSound(Sounds.Click, 0.6)
                 if not isFloating then
                     isFloating = true
@@ -4612,17 +5082,23 @@ function YinYang:CreateWindow(title_text, startTheme)
                     isLocked = false
                     PinBtn.Image = "rbxassetid://83537941312438"  -- candado abierto al cerrar
                 end
-            end)
+                for _, refresh in ipairs(favoriteControlRefreshers) do pcall(refresh) end
+            end
             
             --// Candado: toggle entre fijado (cerrado) y libre (abierto)
-            PinBtn.MouseButton1Click:Connect(function()
+            toggleLock = function()
                 if not isFloating then return end
                 playSound(Sounds.Click, 0.5)
                 isLocked = not isLocked
                 PinBtn.Image = isLocked
                     and "rbxassetid://91959170037380"   -- candado cerrado (fijado)
                     or  "rbxassetid://83537941312438"   -- candado abierto (libre)
-            end)
+                for _, refresh in ipairs(favoriteControlRefreshers) do pcall(refresh) end
+            end
+            DetachBtn.MouseButton1Click:Connect(toggleFloating)
+            PinBtn.MouseButton1Click:Connect(toggleLock)
+
+            syncFavoriteRow()
 
             --// El click del switch en pestaña ya lo maneja CreateToggle internamente
             resetScrollTop(TabPage)
@@ -4630,7 +5106,7 @@ function YinYang:CreateWindow(title_text, startTheme)
 
 
         --// TOGGLE ESTÁNDAR — Premium Redesign
-        function Tab:CreateToggle(textSpanish, textEnglishOrDefault, defaultOrCallback, callback)
+        function Tab:CreateToggle(textSpanish, textEnglishOrDefault, defaultOrCallback, callback, isMirror)
             --// COMPATIBILIDAD: si el 2do argumento es string, es modo bilingüe.
             --// Si es boolean/nil, es la firma antigua: (text, default, callback)
             local textEnglish = textSpanish
@@ -4826,6 +5302,16 @@ function YinYang:CreateWindow(title_text, startTheme)
             end)
 
             resetScrollTop(TabPage)
+
+            if not isMirror then
+                Window._RegisterGlobalOption(self, {
+                    Id = nameSpanish .. "::" .. textSpanish,
+                    NameSpanish = textSpanish,
+                    NameEnglish = textEnglish,
+                    Holder = Holder,
+                    Kind = "Toggle",
+                })
+            end
 
             --// ── CONTROLADOR PÚBLICO ───────────────────────────────────────────────
             return {
@@ -5079,6 +5565,14 @@ function YinYang:CreateWindow(title_text, startTheme)
             
             table.insert(Window.FloatingToggles, {Window = FloatingWindow, Name = text})
 
+            Window._RegisterGlobalOption(self, {
+                Id = text,
+                NameSpanish = text,
+                NameEnglish = text,
+                Holder = FloatingWindow,
+                Kind = "Floating",
+            })
+
             return FloatingWindow
         end
 
@@ -5091,7 +5585,7 @@ function YinYang:CreateWindow(title_text, startTheme)
         --//   Tab:CreateFloatingButton("TextoES", "TextoEN", callback)
         --//   Tab:CreateFloatingButton("TextoES", "TextoEN", cooldownSegundos, callback)
         --// El cooldown (segundos) es opcional. Si es 0 o nil, el botón es inmediato.
-        function Tab:CreateFloatingButton(textSpanish, textEnglishOrCooldown, cooldownOrCallback, callback, isMirror)
+        function Tab:CreateFloatingButton(textSpanish, textEnglishOrCooldown, cooldownOrCallback, callback, isMirror, mirrorSource)
             local textEnglish = textSpanish
             local cooldown, cb
 
@@ -5127,6 +5621,9 @@ function YinYang:CreateWindow(title_text, startTheme)
             local FloatLabel     = nil
             local AccentBar      = nil
             local StateLabel     = nil
+            local favoriteControlRefreshers = {}
+            local toggleFloating
+            local toggleLock
 
             --// ── COOLDOWN COMPARTIDO ──────────────────────────────────────────────────
             --// Un solo task actualiza tanto el subtexto del row como el label de la pill.
@@ -5240,6 +5737,17 @@ function YinYang:CreateWindow(title_text, startTheme)
             corner(PinBtn, 6)
             stroke(PinBtn, Theme.Stroke, 1, 0.5)
 
+            local function syncExternalState()
+                if not isMirror or not mirrorSource then return end
+                local floating = false
+                local locked = false
+                pcall(function() floating = mirrorSource.GetFloating() end)
+                pcall(function() locked = mirrorSource.GetLocked() end)
+                DetachBtn.Text = floating and "←" or "↗"
+                PinBtn.Image = locked and "rbxassetid://91959170037380" or "rbxassetid://83537941312438"
+            end
+            syncExternalState()
+
             --// Botón Favorito — estrella, agrega/saca este botón de la pestaña Favoritos (persiste)
             --// ⚠️ Solo en filas normales: una fila espejo (isMirror) NO debe tener su propia
             --// estrella, o favoritear el espejo generaría otro espejo dentro de Favo (recursión infinita).
@@ -5258,16 +5766,26 @@ function YinYang:CreateWindow(title_text, startTheme)
 
                 local favRow = nil
                 local function syncFavoriteRow()
+                    favoriteControlRefreshers = {}
                     if favRow then
                         pcall(function() favRow.Holder:Destroy() end)
                         favRow = nil
                     end
                     if isFavorite and AutoTabFavoritosRef then
-                        favRow = AutoTabFavoritosRef:CreateFloatingButton(textSpanish, textEnglish, cooldown, cb, true)
+                        favRow = AutoTabFavoritosRef:CreateFloatingButton(
+                            textSpanish, textEnglish, cooldown, cb, true,
+                            {
+                                ToggleFloating = function() toggleFloating() end,
+                                ToggleLock = function() toggleLock() end,
+                                GetFloating = function() return isFloating end,
+                                GetLocked = function() return isLocked end,
+                            }
+                        )
+                        if favRow.SyncExternalState then
+                            table.insert(favoriteControlRefreshers, favRow.SyncExternalState)
+                        end
                     end
                 end
-                syncFavoriteRow()
-
                 FavBtn.MouseButton1Click:Connect(function()
                     playSound(Sounds.Click, 0.5)
                     isFavorite = not isFavorite
@@ -5276,6 +5794,8 @@ function YinYang:CreateWindow(title_text, startTheme)
                     syncFavoriteRow()
                     SyncFavoritesToConfig()
                 end)
+
+                syncFavoriteRow()
             end
 
             --// Área clickeable del row (evita cubrir los botones de control)
@@ -5462,7 +5982,12 @@ function YinYang:CreateWindow(title_text, startTheme)
             end
 
             --// ── DESPRENDER ───────────────────────────────────────────────────────────
-            DetachBtn.MouseButton1Click:Connect(function()
+            toggleFloating = function()
+                if isMirror and mirrorSource then
+                    pcall(mirrorSource.ToggleFloating)
+                    syncExternalState()
+                    return
+                end
                 playSound(Sounds.Click, 0.6)
                 if not isFloating then
                     isFloating = true
@@ -5477,19 +6002,39 @@ function YinYang:CreateWindow(title_text, startTheme)
                     isLocked   = false
                     PinBtn.Image = "rbxassetid://83537941312438"
                 end
-            end)
+                for _, refresh in ipairs(favoriteControlRefreshers) do pcall(refresh) end
+            end
 
             --// ── CANDADO ──────────────────────────────────────────────────────────────
-            PinBtn.MouseButton1Click:Connect(function()
+            toggleLock = function()
+                if isMirror and mirrorSource then
+                    pcall(mirrorSource.ToggleLock)
+                    syncExternalState()
+                    return
+                end
                 if not isFloating then return end
                 playSound(Sounds.Click, 0.5)
                 isLocked = not isLocked
                 PinBtn.Image = isLocked
                     and "rbxassetid://91959170037380"
                     or  "rbxassetid://83537941312438"
-            end)
+                for _, refresh in ipairs(favoriteControlRefreshers) do pcall(refresh) end
+            end
+
+            DetachBtn.MouseButton1Click:Connect(toggleFloating)
+            PinBtn.MouseButton1Click:Connect(toggleLock)
 
             resetScrollTop(TabPage)
+
+            if not isMirror then
+                Window._RegisterGlobalOption(self, {
+                    Id = nameSpanish .. "::" .. textSpanish,
+                    NameSpanish = textSpanish,
+                    NameEnglish = textEnglish,
+                    Holder = Holder,
+                    Kind = "Button",
+                })
+            end
 
             --// API pública del botón
             return {
@@ -5505,6 +6050,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 SetCooldown = function(secs)
                     cooldown = secs or cooldown
                 end,
+                SyncExternalState = syncExternalState,
             }
         end
 
@@ -5820,6 +6366,16 @@ function YinYang:CreateWindow(title_text, startTheme)
                 end)
             end
 
+            if not isMirror then
+                Window._RegisterGlobalOption(self, {
+                    Id = nameSpanish .. "::" .. text,
+                    NameSpanish = text,
+                    NameEnglish = text,
+                    Holder = Holder,
+                    Kind = "Slider",
+                })
+            end
+
             --// RETORNAR TABLA CON MÉTODOS
             return {
                 Holder = Holder,
@@ -6029,6 +6585,16 @@ function YinYang:CreateWindow(title_text, startTheme)
                 playSound(Sounds.Click, 0.6)
                 pcall(callback)
             end)
+
+            if Window._RegisterGlobalOption then
+                Window._RegisterGlobalOption(self, {
+                    Id = textSpanish,
+                    NameSpanish = textSpanish,
+                    NameEnglish = textEnglish,
+                    Holder = BtnWrapper,
+                    Kind = "Button",
+                })
+            end
 
             --// Devolver el wrapper para que el layout lo trate como si fuera el botón
             return BtnWrapper
@@ -6347,6 +6913,14 @@ function YinYang:CreateWindow(title_text, startTheme)
                     end
                 end
             end)
+
+            Window._RegisterGlobalOption(self, {
+                Id = nameSpanish .. "::" .. textSpanish,
+                NameSpanish = textSpanish,
+                NameEnglish = textEnglish,
+                Holder = Holder,
+                Kind = "Script",
+            })
 
             return Holder
         end
@@ -11696,7 +12270,7 @@ do
         end
     end
 
-    local AutoTabShaders = Window:CreateTab("Shaders", "Shaders", "rbxassetid://114693810646148")
+    local AutoTabShaders = Window:CreateTab("Shaders", "Shaders", "rbxassetid://125878144912717")
     AutoTabShaders:CreateLabel("Sistema de Shaders Roblox", "Roblox Shader System", 16)
     AutoTabShaders:CreateLabel(
         "Elegí un modo visual o abrí Personalizado para ajustar cada parámetro sin tocar los sliders del resto de la librería.",
@@ -11946,6 +12520,19 @@ do
 end
 
     --//  4TA PESTAÑA PERMANENTE: AJUSTES
+    local ChatCornerMessagesEnabled = SavedConfig.ChatCornerMessages ~= false
+    local ChatCornerContainer = nil
+    local ChatCornerEntries = {}
+
+    local function ClearChatCornerMessages()
+        for _, entry in ipairs(ChatCornerEntries) do
+            if entry and entry.Frame and entry.Frame.Parent then
+                entry.Frame:Destroy()
+            end
+        end
+        table.clear(ChatCornerEntries)
+    end
+
     local AutoTabAjustes = Window:CreateTab("Ajustes", "Settings", "rbxassetid://130729134186771")
     BuildAjustesExtras(
         Window,
@@ -11955,6 +12542,18 @@ end
         end,
         function(value)
             SlidersHidden = value
+        end,
+        function()
+            return ChatCornerMessagesEnabled
+        end,
+        function(value)
+            ChatCornerMessagesEnabled = value
+            if ChatCornerContainer then
+                ChatCornerContainer.Visible = value
+                if not value then
+                    ClearChatCornerMessages()
+                end
+            end
         end
     )
 
@@ -12058,51 +12657,10 @@ end
         end)
     end
 
-    --// Traducir un mensaje bajo demanda (botón manual por mensaje)
-    --// callback(translatedText, sourceLanguage, targetLanguage, errorMessage)
-    local function TranslateMessage(text, targetLanguage, callback, msgId, fromLanguage)
-        task.spawn(function()
-            local body = HttpService:JSONEncode({
-                text  = tostring(text),
-                from  = tostring(fromLanguage or "es"), -- idioma del remitente
-                to    = targetLanguage,
-                msgId = msgId or nil,
-            })
-
-            local ok, result = pcall(function()
-                return UniversalRequest({
-                    Url = BACKEND_URL .. "/api/translate",
-                    Method = "POST",
-                    Headers = { ["Content-Type"] = "application/json" },
-                    Body = body,
-                })
-            end)
-
-            if not ok or not result then
-                warn("[ChatGlobal] Error al traducir (request):", result)
-                callback(nil, nil, targetLanguage, "request_failed")
-                return
-            end
-
-            local decodeOk, data = pcall(function()
-                return HttpService:JSONDecode(result.Body)
-            end)
-
-            if decodeOk and data and data.success and data.translated then
-                callback(data.translated, data.from, data.to, nil)
-            elseif decodeOk and data and data.error == "already in target language" then
-                -- No es un error real, el mensaje ya está en el idioma del usuario
-                callback(nil, targetLanguage, targetLanguage, "same_language")
-            else
-                warn("[ChatGlobal] Respuesta de /api/translate inválida:", result.Body)
-                callback(nil, nil, targetLanguage, "invalid_response")
-            end
-        end)
-    end
-
     --// Polling: pide mensajes nuevos cada ChatSyncPollRate segundos
     --// Se conecta después de crear el ChatTab (usa RenderMessage y AddChatMessage)
     local function StartBackendPolling(onNewMessage)
+        local initialSyncComplete = false
         task.spawn(function()
             while true do
                 local ok, response = pcall(function()
@@ -12125,10 +12683,12 @@ end
                                 knownServerIds[msg.id] = true
                                 -- Evitar re-mostrar el mensaje que YO mismo envié
                                 if tostring(msg.playerId) ~= tostring(LocalPlayer.UserId) then
-                                    task.spawn(onNewMessage, msg)
+                                    task.spawn(onNewMessage, msg, not initialSyncComplete)
                                 end
                             end
                         end
+
+                        initialSyncComplete = true
 
                         -- ACTUALIZAR CONTADOR DE USUARIOS ONLINE
                         if data.onlineCount then
@@ -12276,6 +12836,133 @@ end
     	ZIndex = 10,
     })
 
+    --// MENSAJES NUEVOS EN ESQUINA DERECHA
+    ChatCornerContainer = mk("Frame", {
+        Parent = ScreenGui,
+        Size = UDim2.fromOffset(220, 350),
+        Position = UDim2.new(1, -12, 0, 48),
+        AnchorPoint = Vector2.new(1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        Visible = ChatCornerMessagesEnabled,
+        ZIndex = 100,
+    })
+
+    mk("UIListLayout", {
+        Parent = ChatCornerContainer,
+        Padding = UDim.new(0, 3),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        VerticalAlignment = Enum.VerticalAlignment.Top,
+    })
+
+    mk("UIPadding", {
+        Parent = ChatCornerContainer,
+        PaddingTop = UDim.new(0, 4),
+        PaddingBottom = UDim.new(0, 4),
+        PaddingLeft = UDim.new(0, 4),
+        PaddingRight = UDim.new(0, 4),
+    })
+
+    local ChatCornerSequence = 0
+    local MAX_CORNER_MESSAGES = 10
+    local CORNER_MESSAGE_LIFETIME = 10
+    local ApplyChatCornerSpecialEffects
+
+    local function ShowChatCornerMessage(playerName, userId, messageText)
+        if not ChatCornerMessagesEnabled or not ChatCornerContainer then
+            return
+        end
+
+        local text = tostring(messageText or "")
+        if text == "" or text:match("^%[%[STICKER:") then
+            return
+        end
+
+        while #ChatCornerEntries >= MAX_CORNER_MESSAGES do
+            local oldest = table.remove(ChatCornerEntries, 1)
+            if oldest and oldest.Frame and oldest.Frame.Parent then
+                oldest.Frame:Destroy()
+            end
+        end
+
+        ChatCornerSequence = ChatCornerSequence + 1
+
+        local Row = mk("Frame", {
+            Parent = ChatCornerContainer,
+            Size = UDim2.new(1, 0, 0, 31),
+            BackgroundColor3 = Theme.Secondary,
+            BackgroundTransparency = 0.55,
+            BorderSizePixel = 0,
+            LayoutOrder = -ChatCornerSequence,
+            ZIndex = 100,
+        })
+        Row:SetAttribute("ThemeRole", "Secondary")
+        corner(Row, 7)
+        stroke(Row, Theme.Stroke, 1, 0.55)
+
+        local Avatar = mk("ImageLabel", {
+            Parent = Row,
+            Size = UDim2.fromOffset(25, 25),
+            Position = UDim2.new(0, 4, 0.5, -12.5),
+            BackgroundColor3 = Theme.AccentOff,
+            BackgroundTransparency = 0.05,
+            BorderSizePixel = 0,
+            Image = GetPlayerAvatar(userId),
+            ScaleType = Enum.ScaleType.Crop,
+            ZIndex = 102,
+        })
+        corner(Avatar, 999)
+        stroke(Avatar, Theme.Stroke, 1, 0.45)
+
+        local NameLabel = mk("TextLabel", {
+            Parent = Row,
+            Size = UDim2.new(1, -39, 0, 12),
+            Position = UDim2.new(0, 35, 0, 2),
+            BackgroundTransparency = 1,
+            Text = tostring(playerName or "Unknown"),
+            Font = Enum.Font.GothamBold,
+            TextSize = 10,
+            TextColor3 = Theme.Accent,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 102,
+        })
+
+        mk("TextLabel", {
+            Parent = Row,
+            Size = UDim2.new(1, -39, 0, 15),
+            Position = UDim2.new(0, 35, 0, 14),
+            BackgroundTransparency = 1,
+            Text = text,
+            Font = Enum.Font.Gotham,
+            TextSize = 10,
+            TextColor3 = Theme.Text,
+            TextXAlignment = Enum.TextXAlignment.Left,
+            TextYAlignment = Enum.TextYAlignment.Center,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 102,
+        })
+
+        if ApplyChatCornerSpecialEffects then
+            ApplyChatCornerSpecialEffects(Row, NameLabel, userId)
+        end
+
+        local entry = { Frame = Row }
+        table.insert(ChatCornerEntries, entry)
+
+        task.delay(CORNER_MESSAGE_LIFETIME, function()
+            if Row and Row.Parent then
+                Row:Destroy()
+            end
+            for i, current in ipairs(ChatCornerEntries) do
+                if current == entry then
+                    table.remove(ChatCornerEntries, i)
+                    break
+                end
+            end
+        end)
+    end
+
     --// Mini-header dentro de ChatRoot
     local ChatHeader = mk("Frame", {
     	Parent = ChatRoot,
@@ -12394,19 +13081,6 @@ end
     })
     SendButton:SetAttribute("ThemeRole", "Accent")
     corner(SendButton, 8)
-
-    local CharLabel = mk("TextLabel", {
-    	Parent = ChatFooter,
-    	Size = UDim2.new(0, 90, 0, 12),
-    	Position = UDim2.new(0, 0, 1, -10),
-    	BackgroundTransparency = 1,
-    	Text = "0 / 500",
-    	Font = Enum.Font.Gotham,
-    	TextSize = 9,
-    	TextColor3 = Theme.TextDim,
-    	TextXAlignment = Enum.TextXAlignment.Left,
-    	ZIndex = 21,
-    })
 
     -- BOTÓN STICKER (izquierda del input)
     local StickerButton = mk("ImageButton", {
@@ -12824,8 +13498,23 @@ end
         end)
     end
 
+    ApplyChatCornerSpecialEffects = function(Row, NameLabel, userId)
+        local specialUser = GetSpecialUser(userId)
+        if not specialUser then
+            return
+        end
+
+        if specialUser.RainbowName then
+            StartMouseozaNameCycle(NameLabel)
+        end
+
+        if specialUser.RainbowBorder then
+            StartMouseozaBorderCycle(Row, 1)
+        end
+    end
+
     local function RenderMessage(playerName, userId, messageText, timeStamp, isSelf, msgId, fromLang)
-    	-- DETECCIÓN DE STICKER
+	-- DETECCIÓN DE STICKER
     	local stickerAsset = messageText:match("^%[%[STICKER:(rbxassetid://%d+)%]%]$")
     	if stickerAsset then
     		local StickerFrame = mk("Frame", {
@@ -13093,110 +13782,58 @@ end
     	updateMessageMaxWidth()
     	ContentFrame:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateMessageMaxWidth)
 
-    	--// ════════════════════════════════════════════════════════════════
-    	--// BOTÓN DE TRADUCCIÓN MANUAL (por mensaje, bajo demanda)
-    	--// Se agrega como nueva fila de ContentFrame (usa su UIListLayout ya
-    	--// existente) — no toca la Bubble ni el MessageLabel original.
-    	--// ════════════════════════════════════════════════════════════════
-    	local TranslateBtn = mk("TextButton", {
-    	    Parent = ContentFrame,
-    	    Size = UDim2.new(0, 0, 0, 14),
-    	    AutomaticSize = Enum.AutomaticSize.X,
-    	    BackgroundTransparency = 1,
-    	    Text = GetText("Traducir", "Translate"),
-    	    Font = Enum.Font.GothamBold,
-    	    TextSize = 10,
-    	    TextColor3 = Theme.Accent,
-    	    TextXAlignment = Enum.TextXAlignment.Left,
-    	    LayoutOrder = 3,
-    	    ZIndex = 15,
-    	})
-
-    	local translatedBubble, isTranslated, isLoadingTranslation = nil, false, false
-
-    	local function ClearTranslation()
-    	    if translatedBubble then
-    	        translatedBubble:Destroy()
-    	        translatedBubble = nil
-    	    end
-    	    isTranslated = false
-    	    TranslateBtn.Text = GetText("Traducir", "Translate")
-    	end
-
-    	local function ShowTranslation(translatedText)
-    	    translatedBubble = mk("Frame", {
-    	        Parent = ContentFrame,
-    	        Size = UDim2.new(1, 0, 0, 0),
-    	        AutomaticSize = Enum.AutomaticSize.Y,
-    	        BackgroundColor3 = baseColor,
+    	--// COPIAR MENSAJE: icono pequeño, flotante y adaptado al tamaño real de la burbuja
+    	--// No participa en el UIListLayout, por lo que no empuja "Translate".
+    	if not stickerAsset then
+    	    local CopyButton = mk("ImageButton", {
+    	        Parent = MessageFrame,
+    	        Size = UDim2.fromOffset(16, 16),
+    	        Position = UDim2.fromOffset(0, 0),
     	        BackgroundTransparency = 1,
     	        BorderSizePixel = 0,
-    	        ClipsDescendants = true,
-    	        LayoutOrder = 4,
-    	        ZIndex = 12,
+    	        Image = "rbxassetid://73493052922383",
+    	        ImageColor3 = Color3.fromRGB(255, 255, 255),
+    	        ImageTransparency = 0.05,
+    	        ScaleType = Enum.ScaleType.Fit,
+    	        ZIndex = 16,
     	    })
-    	    corner(translatedBubble, cornerRadius)
-    	    stroke(translatedBubble, Theme.Accent, 1, 0.6)
-    	    mk("UIPadding", {
-    	        Parent = translatedBubble,
-    	        PaddingTop = UDim.new(0, 8),
-    	        PaddingBottom = UDim.new(0, 8),
-    	        PaddingLeft = UDim.new(0, 8),
-    	        PaddingRight = UDim.new(0, 8),
-    	    })
-    	    local TranslatedLabel = mk("TextLabel", {
-    	        Parent = translatedBubble,
-    	        Size = UDim2.new(1, 0, 0, 0),
-    	        BackgroundTransparency = 1,
-    	        Text = tostring(translatedText),
-    	        Font = Enum.Font.Gotham,
-    	        TextSize = 12,
-    	        TextColor3 = Theme.TextDim,
-    	        TextWrapped = true,
-    	        TextXAlignment = Enum.TextXAlignment.Left,
-    	        TextYAlignment = Enum.TextYAlignment.Top,
-    	        AutomaticSize = Enum.AutomaticSize.Y,
-    	        ZIndex = 15,
-    	    })
-    	    TranslatedLabel:SetAttribute("ThemeTextRole", "TextDim")
-    	    isTranslated = true
-    	    TranslateBtn.Text = GetText("Ocultar traducción", "Hide translation")
-    	    ScrollChatToBottom()
-    	end
 
-    	TranslateBtn.MouseButton1Click:Connect(function()
-    	    if isLoadingTranslation then return end
+    	    local function updateCopyButtonPosition()
+    	        if not CopyButton or not CopyButton.Parent then
+    	            return
+    	        end
 
-    	    if isTranslated then
-    	        ClearTranslation()
-    	        return
+    	        local relativeX = (Bubble.AbsolutePosition.X - MessageFrame.AbsolutePosition.X)
+    	            + Bubble.AbsoluteSize.X - CopyButton.AbsoluteSize.X
+    	        local relativeY = (Bubble.AbsolutePosition.Y - MessageFrame.AbsolutePosition.Y)
+    	            + Bubble.AbsoluteSize.Y + 3
+
+    	        CopyButton.Position = UDim2.fromOffset(
+    	            math.max(0, math.floor(relativeX)),
+    	            math.max(0, math.floor(relativeY))
+    	        )
     	    end
 
-    	    isLoadingTranslation = true
-    	    TranslateBtn.Text = GetText("Traduciendo...", "Translating...")
+    	    updateCopyButtonPosition()
+    	    Bubble:GetPropertyChangedSignal("AbsoluteSize"):Connect(updateCopyButtonPosition)
+    	    Bubble:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateCopyButtonPosition)
+    	    MessageFrame:GetPropertyChangedSignal("AbsolutePosition"):Connect(updateCopyButtonPosition)
 
-            local targetLanguage = LanguageSystem.CurrentLanguage or "es"
+    	    CopyButton.MouseButton1Click:Connect(function()
+    	        local ok = pcall(function()
+    	            setclipboard(tostring(messageText or ""))
+    	        end)
 
-    	    TranslateMessage(messageText, targetLanguage, function(translated, fromLang, toLang, err)
-    	        isLoadingTranslation = false
-
-    	        if translated and translated ~= "" and translated ~= messageText then
-    	            ShowTranslation(translated)
-    	        else
-    	            local sameLanguage = (fromLang and fromLang == targetLanguage) or (toLang and toLang == targetLanguage)
-    	            if sameLanguage or translated == messageText then
-    	                TranslateBtn.Text = GetText("Ya estaba en este idioma", "Already in this language")
-    	            else
-    	                TranslateBtn.Text = GetText("Error, reintentar", "Error, retry")
-    	            end
-    	            task.delay(2, function()
-    	                if TranslateBtn and TranslateBtn.Parent then
-    	                    TranslateBtn.Text = GetText("Traducir", "Translate")
+    	        if ok then
+    	            CopyButton.ImageTransparency = 0.45
+    	            task.delay(0.8, function()
+    	                if CopyButton and CopyButton.Parent then
+    	                    CopyButton.ImageTransparency = 0.05
     	                end
     	            end)
     	        end
-    	    end, msgId, fromLang)
-    	end)
+    	    end)
+    	end
 
     	--// ANIMACIÓN DE APARICIÓN: Transición suave (0.15s)
     	Bubble.BackgroundTransparency = baseTransparency + 1
@@ -13230,12 +13867,12 @@ end
 
     	AddChatMessage(localPlayer.Name, localPlayer.UserId, messageText, timestamp)
     	RenderMessage(localPlayer.Name, localPlayer.UserId, messageText, timestamp, true)
+    	ShowChatCornerMessage(localPlayer.Name, localPlayer.UserId, messageText)
 
     	-- Sincronizar con el backend para que otros jugadores lo reciban
     	BackendSendMessage(localPlayer.Name, localPlayer.UserId, messageText)
 
     	MessageInput.Text = ""
-    	CharLabel.Text = "0 / 500"
     end
 
     MessageInput.Changed:Connect(function(property)
@@ -13247,7 +13884,6 @@ end
     		MessageInput.Text = MessageInput.Text:sub(1, MAX_CHAR)
     	end
 
-    	CharLabel.Text = tostring(#MessageInput.Text) .. " / " .. tostring(MAX_CHAR)
     end)
 
     SendButton.MouseButton1Click:Connect(SendMessage)
@@ -13440,6 +14076,7 @@ end
     	local timestamp = os.date("%H:%M:%S")
     	AddChatMessage(playerName, userId, message, timestamp)
     	RenderMessage(playerName, userId, message, timestamp, false)
+    	ShowChatCornerMessage(playerName, userId, message)
     end
 
     Window.ChatMessages = ChatMessages
@@ -13455,9 +14092,12 @@ end
 
     --// Iniciar sincronización en tiempo real con el backend
     --// Cada mensaje nuevo de OTRO jugador se agrega y renderiza automáticamente
-    StartBackendPolling(function(msg)
+    StartBackendPolling(function(msg, isInitialSync)
         AddChatMessage(msg.playerName, msg.playerId, msg.message, os.date("%H:%M:%S", msg.timestamp))
         RenderMessage(msg.playerName, msg.playerId, msg.message, os.date("%H:%M:%S", msg.timestamp), false, msg.id, msg.lang)
+        if not isInitialSync then
+            ShowChatCornerMessage(msg.playerName, msg.playerId, msg.message)
+        end
         --// Badge: sumar no leído si el chat está cerrado
         addUnread()
     end)
@@ -16433,7 +17073,7 @@ end)()
 --// - Para DESACTIVAR: Cambia "DEMO_ACTIVO" a false
 --// ============================================================
 
-local DEMO_ACTIVO = false  -- Demo activada
+local DEMO_ACTIVO = false -- Demo activada
 
 if DEMO_ACTIVO then
     task.wait(0.5)
