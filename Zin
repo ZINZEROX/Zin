@@ -56,6 +56,7 @@ local TweenService = game:GetService("TweenService")
 local SoundService = game:GetService("SoundService")
 local RunService = game:GetService("RunService")
 local HttpService = game:GetService("HttpService")
+local TeleportService = game:GetService("TeleportService")
 local LocalizationService = game:GetService("LocalizationService")
 local StarterGui = game:GetService("StarterGui")
 local LocalPlayer = Players.LocalPlayer
@@ -12950,8 +12951,8 @@ end
 
     local MessageInput = mk("TextBox", {
     	Parent = ChatFooter,
-    	Size = UDim2.new(1, -120, 0, 36),
-    	Position = UDim2.new(0, 50, 0.5, -18),
+    	Size = UDim2.new(1, -156, 0, 36),
+    	Position = UDim2.new(0, 86, 0.5, -18),
     	BackgroundColor3 = Theme.Secondary,
     	BackgroundTransparency = 0.25,
     	BorderSizePixel = 0,
@@ -12998,6 +12999,50 @@ end
     })
     StickerButton:SetAttribute("ThemeRole", "Secondary")
     corner(StickerButton, 8)
+
+    -- ════════════════════════════════════════════════════════════════
+    -- ⚠️ LÍMITE DE 200 LOCALES DE LUA — LEER ANTES DE AGREGAR ALGO NUEVO ACÁ
+    -- ════════════════════════════════════════════════════════════════
+    -- Este scope (la función que arma la pestaña de Chat: ChatFooter, StickerButton,
+    -- MessageInput, RenderMessage, etc.) ya está al límite de 200 variables `local`
+    -- que permite Lua por función. Se confirmó con pruebas reales: hasta agregar UNA
+    -- sola variable local vacía acá rompe la compilación de TODO el script, sin
+    -- ningún error visible en consola (algunos ejecutores móviles como Delta lo
+    -- silencian).
+    --
+    -- REGLA: cualquier botón, función o variable NUEVA que se agregue a esta sección
+    -- del chat NO debe declararse como `local`. Hay que colgarla como campo de la
+    -- tabla `Window` (el objeto principal de la librería, ya tiene 100+ campos y no
+    -- itera con pairs() en ningún lado, así que agregar campos es seguro):
+    --
+    --   MAL  (gasta 1 de los 200 locales, puede romper todo):
+    --     local MiBotonNuevo = mk("ImageButton", {...})
+    --     local function MiFuncionNueva() ... end
+    --
+    --   BIEN (no gasta cupo de local, siempre seguro):
+    --     Window.MiBotonNuevo = mk("ImageButton", {...})
+    --     Window.MiFuncionNueva = function() ... end
+    --
+    -- Y todas las referencias internas (Connect, llamados, etc.) usan Window.NombreCosa
+    -- en vez del nombre suelto. Ejemplo real ya aplicado: Window.InviteButton,
+    -- Window.RenderInviteCard, Window.SendServerInvite (sistema de invitación de servidor).
+    -- ════════════════════════════════════════════════════════════════
+
+    -- BOTÓN INVITACIÓN DE SERVIDOR (a la derecha del ícono de stickers)
+    Window.InviteButton = mk("ImageButton", {
+        Parent = ChatFooter,
+        Size = UDim2.new(0, 30, 0, 30),
+        Position = UDim2.new(0, 50, 0.5, -15),
+        BackgroundColor3 = Theme.Secondary,
+        BackgroundTransparency = 0.25,
+        BorderSizePixel = 0,
+        Image = "rbxassetid://139587409854967",
+        ImageColor3 = Color3.fromRGB(255, 255, 255),
+        ScaleType = Enum.ScaleType.Fit,
+        ZIndex = 21,
+    })
+    Window.InviteButton:SetAttribute("ThemeRole", "Secondary")
+    corner(Window.InviteButton, 8)
 
     -- PANEL DE STICKERS
     local StickerPanel = mk("Frame", {
@@ -13414,6 +13459,233 @@ end
         end
     end
 
+    -- Colgado en Window.* (no como 'local function') — ver nota de límite de 200 locales arriba
+    Window.RenderInviteCard = function(playerName, userId, timeStamp, isSelf, inviteJobId)
+    	-- CONTENEDOR: mismo esqueleto que un mensaje normal (avatar a la izquierda + contenido)
+    	local MessageFrame = mk("Frame", {
+    		Parent = ChatContainer,
+    		Size = UDim2.new(1, 0, 0, 0),
+    		AutomaticSize = Enum.AutomaticSize.Y,
+    		BackgroundTransparency = 1,
+    		BorderSizePixel = 0,
+    		ClipsDescendants = false,
+    		LayoutOrder = #ChatMessages,
+    		ZIndex = 12,
+    	})
+
+    	-- AVATAR del usuario que mandó la invitación (igual que un mensaje normal)
+    	local InviteAvatar = mk("ImageLabel", {
+    		Parent = MessageFrame,
+    		Size = UDim2.new(0, 46, 0, 46),
+    		Position = UDim2.new(0, 0, 0, 0),
+    		BackgroundColor3 = isSelf and Theme.Accent or Theme.AccentOff,
+    		BackgroundTransparency = 0.05,
+    		BorderSizePixel = 0,
+    		Image = GetPlayerAvatar(userId),
+    		ScaleType = Enum.ScaleType.Crop,
+    		ZIndex = 14,
+    	})
+    	InviteAvatar:SetAttribute("ThemeRole", isSelf and "Accent" or "AccentOff")
+    	corner(InviteAvatar, 999)
+    	stroke(InviteAvatar, Theme.Stroke, 1.5, 0.35)
+
+    	local ContentFrame = mk("Frame", {
+    		Parent = MessageFrame,
+    		Size = UDim2.new(1, -54, 0, 0),
+    		Position = UDim2.new(0, 54, 0, 0),
+    		AutomaticSize = Enum.AutomaticSize.Y,
+    		BackgroundTransparency = 1,
+    		BorderSizePixel = 0,
+    		ClipsDescendants = false,
+    		ZIndex = 12,
+    	})
+    	mk("UIListLayout", {
+    		Parent = ContentFrame,
+    		Padding = UDim.new(0, 4),
+    		SortOrder = Enum.SortOrder.LayoutOrder,
+    		VerticalAlignment = Enum.VerticalAlignment.Top,
+    	})
+
+    	-- Nombre + hora (mismo header que un mensaje normal)
+    	local HeaderFrame = mk("Frame", {
+    		Parent = ContentFrame,
+    		Size = UDim2.new(1, 0, 0, 16),
+    		BackgroundTransparency = 1,
+    		BorderSizePixel = 0,
+    		LayoutOrder = 1,
+    		ZIndex = 15,
+    	})
+
+    	local InviteUsernameLabel = mk("TextLabel", {
+    		Parent = HeaderFrame,
+    		Size = UDim2.new(0, 0, 1, 0),
+    		Position = UDim2.new(0, 0, 0, 0),
+    		BackgroundTransparency = 1,
+    		Text = (isSelf and "Tú" or tostring(playerName or "Unknown")),
+    		Font = Enum.Font.GothamBlack,
+    		TextSize = 14,
+    		TextColor3 = isSelf and Theme.Accent or Theme.Text,
+    		TextXAlignment = Enum.TextXAlignment.Left,
+    		TextYAlignment = Enum.TextYAlignment.Center,
+    		AutomaticSize = Enum.AutomaticSize.X,
+    		ZIndex = 15,
+    	})
+    	InviteUsernameLabel:SetAttribute("ThemeTextRole", isSelf and "Accent" or "Text")
+
+    	local InviteTimeLabel = mk("TextLabel", {
+    		Parent = HeaderFrame,
+    		Size = UDim2.new(1, 0, 1, 0),
+    		Position = UDim2.new(0, 0, 0, 0),
+    		BackgroundTransparency = 1,
+    		Text = tostring(timeStamp or os.date("%H:%M:%S")),
+    		Font = Enum.Font.Gotham,
+    		TextSize = 10,
+    		TextColor3 = Theme.TextDim,
+    		TextXAlignment = Enum.TextXAlignment.Right,
+    		TextYAlignment = Enum.TextYAlignment.Center,
+    		ZIndex = 15,
+    	})
+    	InviteTimeLabel:SetAttribute("ThemeTextRole", "TextDim")
+
+    	-- TARJETA DE INVITACIÓN: opaca (no transparente), color = Theme.Background,
+    	-- adaptable a cualquier tema vía ThemeRole (igual que el resto del chat)
+    	local InviteCard = mk("Frame", {
+    		Parent = ContentFrame,
+    		Size = UDim2.new(0, 240, 0, 148),
+    		BackgroundColor3 = Theme.Background,
+    		BackgroundTransparency = 0,
+    		BorderSizePixel = 0,
+    		LayoutOrder = 2,
+    		ZIndex = 12,
+    	})
+    	InviteCard:SetAttribute("ThemeRole", "Background")
+    	corner(InviteCard, 12)
+    	stroke(InviteCard, Theme.Stroke, 1, 0.35)
+
+    	local CardTitle = mk("TextLabel", {
+    		Parent = InviteCard,
+    		Size = UDim2.new(1, -24, 0, 18),
+    		Position = UDim2.new(0, 12, 0, 10),
+    		BackgroundTransparency = 1,
+    		Text = "Invitación de servidor",
+    		Font = Enum.Font.GothamBold,
+    		TextSize = 13,
+    		TextColor3 = Theme.Text,
+    		TextXAlignment = Enum.TextXAlignment.Left,
+    		ZIndex = 14,
+    	})
+    	CardTitle:SetAttribute("ThemeTextRole", "Text")
+
+    	local CardDivider = mk("Frame", {
+    		Parent = InviteCard,
+    		Size = UDim2.new(1, -24, 0, 1),
+    		Position = UDim2.new(0, 12, 0, 31),
+    		BackgroundColor3 = Theme.Stroke,
+    		BorderSizePixel = 0,
+    		ZIndex = 14,
+    	})
+    	CardDivider:SetAttribute("ThemeRole", "Stroke")
+
+    	local CardSubtitle = mk("TextLabel", {
+    		Parent = InviteCard,
+    		Size = UDim2.new(1, -24, 0, 30),
+    		Position = UDim2.new(0, 12, 0, 38),
+    		BackgroundTransparency = 1,
+    		Text = (isSelf and "Tú" or tostring(playerName)) .. " te invitó a unirte a su servidor",
+    		Font = Enum.Font.Gotham,
+    		TextSize = 11,
+    		TextColor3 = Theme.TextDim,
+    		TextWrapped = true,
+    		TextXAlignment = Enum.TextXAlignment.Left,
+    		ZIndex = 14,
+    	})
+    	CardSubtitle:SetAttribute("ThemeTextRole", "TextDim")
+
+    	local CardIcon = mk("ImageLabel", {
+    		Parent = InviteCard,
+    		Size = UDim2.new(0, 20, 0, 20),
+    		Position = UDim2.new(0, 12, 0, 72),
+    		BackgroundTransparency = 1,
+    		Image = "rbxassetid://139587409854967",
+    		ScaleType = Enum.ScaleType.Fit,
+    		ZIndex = 14,
+    	})
+
+    	-- "Yin Yang Invitation Server" + nombre de quien la mandó
+    	local CardServerName = mk("TextLabel", {
+    		Parent = InviteCard,
+    		Size = UDim2.new(1, -84, 0, 14),
+    		Position = UDim2.new(0, 38, 0, 70),
+    		BackgroundTransparency = 1,
+    		Text = "Yin Yang Invitation Server",
+    		Font = Enum.Font.GothamBold,
+    		TextSize = 11,
+    		TextColor3 = Theme.Text,
+    		TextXAlignment = Enum.TextXAlignment.Left,
+    		ZIndex = 14,
+    	})
+    	CardServerName:SetAttribute("ThemeTextRole", "Text")
+
+    	local CardInviterName = mk("TextLabel", {
+    		Parent = InviteCard,
+    		Size = UDim2.new(1, -84, 0, 13),
+    		Position = UDim2.new(0, 38, 0, 85),
+    		BackgroundTransparency = 1,
+    		Text = (isSelf and "Tú" or tostring(playerName or "Unknown")),
+    		Font = Enum.Font.Gotham,
+    		TextSize = 10,
+    		TextColor3 = Theme.TextDim,
+    		TextXAlignment = Enum.TextXAlignment.Left,
+    		ZIndex = 14,
+    	})
+    	CardInviterName:SetAttribute("ThemeTextRole", "TextDim")
+
+    	local InviteJoinBtn = mk("TextButton", {
+    		Parent = InviteCard,
+    		Size = UDim2.new(1, -24, 0, 30),
+    		Position = UDim2.new(0, 12, 1, -40),
+    		BackgroundColor3 = Theme.Accent,
+    		BorderSizePixel = 0,
+    		Text = "Unirse",
+    		TextColor3 = Theme.AccentText,
+    		Font = Enum.Font.GothamBold,
+    		TextSize = 12,
+    		ZIndex = 14,
+    	})
+    	InviteJoinBtn:SetAttribute("ThemeRole", "Accent")
+    	InviteJoinBtn:SetAttribute("ThemeTextRole", "AccentText")
+    	corner(InviteJoinBtn, 8)
+
+    	InviteJoinBtn.MouseButton1Click:Connect(function()
+    		if inviteJobId == tostring(game.JobId) then
+    			InviteJoinBtn.Text = "Ya estás aquí"
+    			task.delay(1.5, function()
+    				if InviteJoinBtn and InviteJoinBtn.Parent then
+    					InviteJoinBtn.Text = "Unirse"
+    				end
+    			end)
+    			return
+    		end
+
+    		InviteJoinBtn.Text = "Conectando..."
+    		local teleportOk, teleportErr = pcall(function()
+    			TeleportService:TeleportToPlaceInstance(game.PlaceId, inviteJobId, Players.LocalPlayer)
+    		end)
+
+    		if not teleportOk then
+    			warn("[YinYang Chat] Invitación de servidor: teleport falló:", teleportErr)
+    			InviteJoinBtn.Text = "Error, reintenta"
+    			task.delay(1.5, function()
+    				if InviteJoinBtn and InviteJoinBtn.Parent then
+    					InviteJoinBtn.Text = "Unirse"
+    				end
+    			end)
+    		end
+    	end)
+
+    	ScrollChatToBottom()
+    end
+
     local function RenderMessage(playerName, userId, messageText, timeStamp, isSelf, msgId, fromLang)
 	-- DETECCIÓN DE STICKER
     	local stickerAsset = messageText:match("^%[%[STICKER:(rbxassetid://%d+)%]%]$")
@@ -13455,6 +13727,13 @@ end
     		ScrollChatToBottom()
     		return
     	end
+    	-- DETECCIÓN DE INVITACIÓN DE SERVIDOR
+    	local inviteJobId = messageText:match("^%[%[SERVERINVITE:([%w%-]+)%]%]$")
+    	if inviteJobId then
+    		Window.RenderInviteCard(playerName, userId, timeStamp, isSelf, inviteJobId)
+    		return
+    	end
+
     	local style = GetUserBubbleStyle(userId)
     	local assetId = GetUserBubbleAsset(userId)
 
@@ -13803,6 +14082,27 @@ end
         StickerPanel.Visible = false
     end
 
+    --// ════════════════════════════════════════════════════════════════
+    --// LÓGICA DE INVITACIÓN DE SERVIDOR
+    --// (colgado en Window.* porque este scope ya está al límite de 200 locales de Lua)
+    --// ════════════════════════════════════════════════════════════════
+
+    Window.SendServerInvite = function()
+        local localPlayer = Players.LocalPlayer
+        local jobId = tostring(game.JobId or "")
+
+        if jobId == "" then
+            warn("[YinYang Chat] No se pudo enviar la invitación: JobId vacío (Studio/Play local)")
+            return
+        end
+
+        local timestamp = os.date("%H:%M:%S")
+        local inviteMsg = "[[SERVERINVITE:" .. jobId .. "]]"
+        AddChatMessage(localPlayer.Name, localPlayer.UserId, inviteMsg, timestamp)
+        RenderMessage(localPlayer.Name, localPlayer.UserId, inviteMsg, timestamp, true)
+        BackendSendMessage(localPlayer.Name, localPlayer.UserId, inviteMsg)
+    end
+
     local function CreateStickerBtn(parent, assetId, isCustom)
         local StickerBtn = mk("ImageButton", {
             Parent = parent,
@@ -13956,6 +14256,10 @@ end
         if StickerPanel.Visible then
             ShowStickerTab("stickers")
         end
+    end)
+
+    Window.InviteButton.MouseButton1Click:Connect(function()
+        Window.SendServerInvite()
     end)
 
     MessageInput.FocusLost:Connect(function(enterPressed)
