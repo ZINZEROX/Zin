@@ -12767,7 +12767,7 @@ end
 
     local ChatCornerSequence = 0
     local MAX_CORNER_MESSAGES = 10
-    local CORNER_MESSAGE_LIFETIME = 10
+    local CORNER_MESSAGE_LIFETIME = 5
     local ApplyChatCornerSpecialEffects
 
     local function ShowChatCornerMessage(playerName, userId, messageText)
@@ -12776,7 +12776,7 @@ end
         end
 
         local text = tostring(messageText or "")
-        if text == "" or text:match("^%[%[STICKER:") then
+        if text == "" or text:match("^%[%[STICKER:") or text:match("^%[%[SERVERINVITE:") then
             return
         end
 
@@ -14035,12 +14035,19 @@ end
     end
 
     local function SendMessage()
+    	local now = os.clock()
+    	if Window.LastMessageTime and (now - Window.LastMessageTime) < 5 then
+    		return
+    	end
+
     	local messageText = MessageInput.Text or ""
     	messageText = messageText:sub(1, MAX_CHAR)
 
     	if messageText:match("^%s*$") then
     		return
     	end
+
+    	Window.LastMessageTime = now
 
     	local localPlayer = Players.LocalPlayer
     	local timestamp = os.date("%H:%M:%S")
@@ -14088,6 +14095,11 @@ end
     --// ════════════════════════════════════════════════════════════════
 
     Window.SendServerInvite = function()
+        local now = os.clock()
+        if Window.LastInviteTime and (now - Window.LastInviteTime) < 60 then
+            return
+        end
+
         local localPlayer = Players.LocalPlayer
         local jobId = tostring(game.JobId or "")
 
@@ -14095,6 +14107,8 @@ end
             warn("[YinYang Chat] No se pudo enviar la invitación: JobId vacío (Studio/Play local)")
             return
         end
+
+        Window.LastInviteTime = now
 
         local timestamp = os.date("%H:%M:%S")
         local inviteMsg = "[[SERVERINVITE:" .. jobId .. "]]"
