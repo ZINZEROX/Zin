@@ -12776,9 +12776,20 @@ end
         end
 
         local text = tostring(messageText or "")
-        if text == "" or text:match("^%[%[STICKER:") or text:match("^%[%[SERVERINVITE:") then
+        if text == "" or text:match("^%[%[SERVERINVITE:") then
             return
         end
+
+        -- Si es una respuesta, mostrar solo el texto real tipeado (sin la cita)
+        local replyRest = text:match("^%[%[REPLY:.-\1.-\1.-%]%](.*)$")
+        if replyRest then
+            text = replyRest
+            if text == "" then
+                return
+            end
+        end
+
+        local stickerAsset = text:match("^%[%[STICKER:(rbxassetid://%d+)%]%]$")
 
         while #ChatCornerEntries >= MAX_CORNER_MESSAGES do
             local oldest = table.remove(ChatCornerEntries, 1)
@@ -12791,7 +12802,7 @@ end
 
         local Row = mk("Frame", {
             Parent = ChatCornerContainer,
-            Size = UDim2.new(1, 0, 0, 31),
+            Size = UDim2.new(1, 0, 0, stickerAsset and 46 or 31),
             BackgroundColor3 = Theme.Secondary,
             BackgroundTransparency = 0.55,
             BorderSizePixel = 0,
@@ -12830,20 +12841,32 @@ end
             ZIndex = 102,
         })
 
-        mk("TextLabel", {
-            Parent = Row,
-            Size = UDim2.new(1, -39, 0, 15),
-            Position = UDim2.new(0, 35, 0, 14),
-            BackgroundTransparency = 1,
-            Text = text,
-            Font = Enum.Font.Gotham,
-            TextSize = 10,
-            TextColor3 = Theme.Text,
-            TextXAlignment = Enum.TextXAlignment.Left,
-            TextYAlignment = Enum.TextYAlignment.Center,
-            TextTruncate = Enum.TextTruncate.AtEnd,
-            ZIndex = 102,
-        })
+        if stickerAsset then
+            local StickerThumb = mk("ImageLabel", {
+                Parent = Row,
+                Size = UDim2.fromOffset(28, 28),
+                Position = UDim2.new(0, 35, 0, 15),
+                BackgroundTransparency = 1,
+                Image = stickerAsset,
+                ScaleType = Enum.ScaleType.Fit,
+                ZIndex = 102,
+            })
+        else
+            mk("TextLabel", {
+                Parent = Row,
+                Size = UDim2.new(1, -39, 0, 15),
+                Position = UDim2.new(0, 35, 0, 14),
+                BackgroundTransparency = 1,
+                Text = text,
+                Font = Enum.Font.Gotham,
+                TextSize = 10,
+                TextColor3 = Theme.Text,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextYAlignment = Enum.TextYAlignment.Center,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                ZIndex = 102,
+            })
+        end
 
         if ApplyChatCornerSpecialEffects then
             ApplyChatCornerSpecialEffects(Row, NameLabel, userId)
@@ -13043,6 +13066,123 @@ end
     })
     Window.InviteButton:SetAttribute("ThemeRole", "Secondary")
     corner(Window.InviteButton, 8)
+
+    -- BANNER "RESPONDIENDO A..." (estilo WhatsApp) — pegado arriba de ChatFooter,
+    -- sin tocar el tamaño/posición de ChatFooter (que usa 0.5 de escala para centrar
+    -- sus botones; si moviera el alto de ChatFooter, esos botones se desalinearían)
+    Window.ReplyBanner = mk("Frame", {
+        Parent = ChatRoot,
+        Size = UDim2.new(1, 0, 0, 30),
+        Position = UDim2.new(0, 0, 1, -78),
+        BackgroundColor3 = Theme.Secondary,
+        BackgroundTransparency = 0.1,
+        BorderSizePixel = 0,
+        Visible = false,
+        ZIndex = 20,
+    })
+    Window.ReplyBanner:SetAttribute("ThemeRole", "Secondary")
+    corner(Window.ReplyBanner, 8)
+
+    Window.ReplyBannerAccent = mk("Frame", {
+        Parent = Window.ReplyBanner,
+        Size = UDim2.new(0, 3, 1, -8),
+        Position = UDim2.new(0, 6, 0, 4),
+        BackgroundColor3 = Theme.Accent,
+        BorderSizePixel = 0,
+        ZIndex = 21,
+    })
+    Window.ReplyBannerAccent:SetAttribute("ThemeRole", "Accent")
+    corner(Window.ReplyBannerAccent, 2)
+
+    Window.ReplyBannerTitle = mk("TextLabel", {
+        Parent = Window.ReplyBanner,
+        Size = UDim2.new(1, -70, 0, 14),
+        Position = UDim2.new(0, 16, 0, 3),
+        BackgroundTransparency = 1,
+        Text = "",
+        Font = Enum.Font.GothamBold,
+        TextSize = 11,
+        TextColor3 = Theme.Accent,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        ZIndex = 21,
+    })
+    Window.ReplyBannerTitle:SetAttribute("ThemeTextRole", "Accent")
+
+    Window.ReplyBannerPreview = mk("TextLabel", {
+        Parent = Window.ReplyBanner,
+        Size = UDim2.new(1, -70, 0, 13),
+        Position = UDim2.new(0, 16, 0, 15),
+        BackgroundTransparency = 1,
+        Text = "",
+        Font = Enum.Font.Gotham,
+        TextSize = 10,
+        TextColor3 = Theme.TextDim,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextTruncate = Enum.TextTruncate.AtEnd,
+        ZIndex = 21,
+    })
+    Window.ReplyBannerPreview:SetAttribute("ThemeTextRole", "TextDim")
+
+    Window.ReplyBannerThumb = mk("ImageLabel", {
+        Parent = Window.ReplyBanner,
+        Size = UDim2.new(0, 22, 0, 22),
+        Position = UDim2.new(1, -60, 0.5, -11),
+        BackgroundTransparency = 1,
+        Image = "",
+        ScaleType = Enum.ScaleType.Fit,
+        Visible = false,
+        ZIndex = 21,
+    })
+
+    Window.ReplyCancelBtn = mk("TextButton", {
+        Parent = Window.ReplyBanner,
+        Size = UDim2.new(0, 24, 0, 24),
+        Position = UDim2.new(1, -30, 0.5, -12),
+        BackgroundColor3 = Theme.Background,
+        BackgroundTransparency = 0.2,
+        BorderSizePixel = 0,
+        Text = "✕",
+        TextColor3 = Theme.TextDim,
+        Font = Enum.Font.GothamBold,
+        TextSize = 12,
+        ZIndex = 21,
+    })
+    Window.ReplyCancelBtn:SetAttribute("ThemeRole", "Background")
+    Window.ReplyCancelBtn:SetAttribute("ThemeTextRole", "TextDim")
+    corner(Window.ReplyCancelBtn, 999)
+
+    Window.SetReplyTarget = function(name, msgType, content)
+        Window.ReplyTarget = {
+            Name = tostring(name),
+            Type = msgType,
+            Content = content,
+        }
+
+        Window.ReplyBannerTitle.Text = "Respondiendo a " .. Window.ReplyTarget.Name
+
+        if msgType == "sticker" then
+            Window.ReplyBannerPreview.Text = "Sticker"
+            Window.ReplyBannerThumb.Image = content
+            Window.ReplyBannerThumb.Visible = true
+        else
+            Window.ReplyBannerPreview.Text = tostring(content):sub(1, 60)
+            Window.ReplyBannerThumb.Visible = false
+        end
+
+        Window.ReplyBanner.Visible = true
+        ChatContainer.Size = UDim2.new(1, 0, 1, -128)
+    end
+
+    Window.ClearReplyTarget = function()
+        Window.ReplyTarget = nil
+        Window.ReplyBanner.Visible = false
+        ChatContainer.Size = UDim2.new(1, 0, 1, -94)
+    end
+
+    Window.ReplyCancelBtn.MouseButton1Click:Connect(function()
+        Window.ClearReplyTarget()
+    end)
 
     -- PANEL DE STICKERS
     local StickerPanel = mk("Frame", {
@@ -13248,14 +13388,24 @@ end
         end)
     end
 
-    local function ScrollChatToBottom()
+    local function ScrollChatToBottom(force)
     	task.defer(function()
     		task.wait()
     		if ChatContainer and ChatContainer.Parent then
-    			ChatContainer.CanvasPosition = Vector2.new(0, math.max(0, ChatContainer.AbsoluteCanvasSize.Y))
+    			if force or Window.ChatIsAtBottom ~= false then
+    				ChatContainer.CanvasPosition = Vector2.new(0, math.max(0, ChatContainer.AbsoluteCanvasSize.Y))
+    			end
     		end
     	end)
     end
+
+    -- Rastrea si el usuario está viendo el fondo del chat (para no interrumpirlo si está
+    -- leyendo mensajes viejos cuando llega un mensaje nuevo). Se actualiza en cada scroll
+    -- manual, ANTES de que llegue contenido nuevo, para que la comparación sea precisa.
+    ChatContainer:GetPropertyChangedSignal("CanvasPosition"):Connect(function()
+    	local maxScroll = math.max(0, ChatContainer.AbsoluteCanvasSize.Y - ChatContainer.AbsoluteWindowSize.Y)
+    	Window.ChatIsAtBottom = (maxScroll - ChatContainer.CanvasPosition.Y) <= 60
+    end)
 
     --// ════════════════════════════════════════════════════════════════
     --// SISTEMA DE BURBUJAS POR USUARIO
@@ -13683,10 +13833,21 @@ end
     		end
     	end)
 
-    	ScrollChatToBottom()
+    	ScrollChatToBottom(isSelf)
     end
 
     local function RenderMessage(playerName, userId, messageText, timeStamp, isSelf, msgId, fromLang)
+    	-- DETECCIÓN DE RESPUESTA (estilo WhatsApp) — se hace primero y "limpia" messageText,
+    	-- así el resto del código (sticker, bubble normal) sigue funcionando sin tocarlo
+    	local replyInfo = nil
+    	do
+    		local rName, rType, rContent, rRest = messageText:match("^%[%[REPLY:(.-)\1(.-)\1(.-)%]%](.*)$")
+    		if rName then
+    			replyInfo = {Name = rName, Type = rType, Content = rContent}
+    			messageText = rRest
+    		end
+    	end
+
 	-- DETECCIÓN DE STICKER
     	local stickerAsset = messageText:match("^%[%[STICKER:(rbxassetid://%d+)%]%]$")
     	if stickerAsset then
@@ -13724,7 +13885,26 @@ end
     			ZIndex = 13,
     		})
 
-    		ScrollChatToBottom()
+    		-- MANTENER PRESIONADO (0.6s) PARA RESPONDER — estilo WhatsApp
+    		local stickerHoldActive = false
+    		StickerFrame.Active = true
+    		StickerFrame.InputBegan:Connect(function(input)
+    			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    				stickerHoldActive = true
+    				task.delay(0.6, function()
+    					if stickerHoldActive then
+    						Window.SetReplyTarget(isSelf and "Tú" or tostring(playerName), "sticker", stickerAsset)
+    					end
+    				end)
+    			end
+    		end)
+    		StickerFrame.InputEnded:Connect(function(input)
+    			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    				stickerHoldActive = false
+    			end
+    		end)
+
+    		ScrollChatToBottom(isSelf)
     		return
     	end
     	-- DETECCIÓN DE INVITACIÓN DE SERVIDOR
@@ -13851,6 +14031,76 @@ end
     	})
     	TimeLabel:SetAttribute("ThemeTextRole", "Text")
 
+    	--// CITA DE RESPUESTA (si este mensaje es una respuesta a otro) — se muestra
+    	--// arriba de la burbuja, como en WhatsApp. No toca la estructura interna de Bubble.
+    	if replyInfo then
+    		local ReplyQuoteFrame = mk("Frame", {
+    			Parent = ContentFrame,
+    			Size = UDim2.new(0, 0, 0, 34),
+    			AutomaticSize = Enum.AutomaticSize.X,
+    			BackgroundColor3 = Theme.Background,
+    			BackgroundTransparency = 0.15,
+    			BorderSizePixel = 0,
+    			ClipsDescendants = true,
+    			LayoutOrder = 2,
+    			ZIndex = 12,
+    		})
+    		ReplyQuoteFrame:SetAttribute("ThemeRole", "Background")
+    		corner(ReplyQuoteFrame, 8)
+
+    		local ReplyAccent = mk("Frame", {
+    			Parent = ReplyQuoteFrame,
+    			Size = UDim2.new(0, 3, 1, -8),
+    			Position = UDim2.new(0, 4, 0, 4),
+    			BackgroundColor3 = Theme.Accent,
+    			BorderSizePixel = 0,
+    			ZIndex = 13,
+    		})
+    		ReplyAccent:SetAttribute("ThemeRole", "Accent")
+    		corner(ReplyAccent, 2)
+
+    		mk("TextLabel", {
+    			Parent = ReplyQuoteFrame,
+    			Size = UDim2.new(0, 0, 0, 14),
+    			Position = UDim2.new(0, 12, 0, 4),
+    			AutomaticSize = Enum.AutomaticSize.X,
+    			BackgroundTransparency = 1,
+    			Text = tostring(replyInfo.Name),
+    			Font = Enum.Font.GothamBold,
+    			TextSize = 11,
+    			TextColor3 = Theme.Accent,
+    			TextXAlignment = Enum.TextXAlignment.Left,
+    			ZIndex = 13,
+    		})
+
+    		if replyInfo.Type == "sticker" then
+    			mk("ImageLabel", {
+    				Parent = ReplyQuoteFrame,
+    				Size = UDim2.new(0, 20, 0, 20),
+    				Position = UDim2.new(0, 12, 0, 20),
+    				BackgroundTransparency = 1,
+    				Image = replyInfo.Content,
+    				ScaleType = Enum.ScaleType.Fit,
+    				ZIndex = 13,
+    			})
+    			mk("UIPadding", {Parent = ReplyQuoteFrame, PaddingRight = UDim.new(0, 40)})
+    		else
+    			mk("TextLabel", {
+    				Parent = ReplyQuoteFrame,
+    				Size = UDim2.new(0, 220, 0, 14),
+    				Position = UDim2.new(0, 12, 0, 19),
+    				BackgroundTransparency = 1,
+    				Text = tostring(replyInfo.Content),
+    				Font = Enum.Font.Gotham,
+    				TextSize = 10,
+    				TextColor3 = Theme.TextDim,
+    				TextXAlignment = Enum.TextXAlignment.Left,
+    				TextTruncate = Enum.TextTruncate.AtEnd,
+    				ZIndex = 13,
+    			})
+    		end
+    	end
+
     	--// BURBUJA: Se adapta al ancho REAL del texto, con un máximo del 88% del contenedor
     	local Bubble = mk("Frame", {
     	    Parent = ContentFrame,
@@ -13860,12 +14110,31 @@ end
     	    BackgroundTransparency = baseTransparency,
     	    BorderSizePixel = 0,
     	    ClipsDescendants = true,
-    	    LayoutOrder = 2,
+    	    LayoutOrder = 3,
     	    ZIndex = 12,
     	})
     	Bubble:SetAttribute("ThemeRole", isSelf and "Accent" or "Secondary")
     	corner(Bubble, cornerRadius)
     	stroke(Bubble, strokeColor, 1.25, 0.35)
+
+    	-- MANTENER PRESIONADO (0.6s) PARA RESPONDER — estilo WhatsApp
+    	local bubbleHoldActive = false
+    	Bubble.Active = true
+    	Bubble.InputBegan:Connect(function(input)
+    		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    			bubbleHoldActive = true
+    			task.delay(0.6, function()
+    				if bubbleHoldActive then
+    					Window.SetReplyTarget(isSelf and "Tú" or tostring(playerName), "text", messageText)
+    				end
+    			end)
+    		end
+    	end)
+    	Bubble.InputEnded:Connect(function(input)
+    		if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    			bubbleHoldActive = false
+    		end
+    	end)
 
     	--// EFECTOS DE BORDE Y ASSET FLOTANTE (staff/admin)
     	if specialUser then
@@ -14031,7 +14300,7 @@ end
     	tweenBubble:Play()
     	tweenAvatar:Play()
 
-    	ScrollChatToBottom()
+    	ScrollChatToBottom(isSelf)
     end
 
     local function SendMessage()
@@ -14052,12 +14321,19 @@ end
     	local localPlayer = Players.LocalPlayer
     	local timestamp = os.date("%H:%M:%S")
 
-    	AddChatMessage(localPlayer.Name, localPlayer.UserId, messageText, timestamp)
-    	RenderMessage(localPlayer.Name, localPlayer.UserId, messageText, timestamp, true)
-    	ShowChatCornerMessage(localPlayer.Name, localPlayer.UserId, messageText)
+    	-- Si hay una respuesta activa, se antepone como tag [[REPLY:nombre\1tipo\1contenido]]
+    	local outgoingText = messageText
+    	if Window.ReplyTarget then
+    		outgoingText = "[[REPLY:" .. Window.ReplyTarget.Name .. "\1" .. Window.ReplyTarget.Type .. "\1" .. tostring(Window.ReplyTarget.Content) .. "]]" .. messageText
+    	end
+    	Window.ClearReplyTarget()
+
+    	AddChatMessage(localPlayer.Name, localPlayer.UserId, outgoingText, timestamp)
+    	RenderMessage(localPlayer.Name, localPlayer.UserId, outgoingText, timestamp, true)
+    	ShowChatCornerMessage(localPlayer.Name, localPlayer.UserId, outgoingText)
 
     	-- Sincronizar con el backend para que otros jugadores lo reciban
-    	BackendSendMessage(localPlayer.Name, localPlayer.UserId, messageText)
+    	BackendSendMessage(localPlayer.Name, localPlayer.UserId, outgoingText)
 
     	MessageInput.Text = ""
     end
