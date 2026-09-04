@@ -13162,10 +13162,16 @@ end
         Window.ReplyBannerTitle.Text = "Respondiendo a " .. Window.ReplyTarget.Name
 
         if msgType == "sticker" then
+            -- Encoger etiquetas para que no se solapen con el thumbnail (22px) + cancel (24px)
+            Window.ReplyBannerTitle.Size   = UDim2.new(1, -86, 0, 14)
+            Window.ReplyBannerPreview.Size = UDim2.new(1, -86, 0, 13)
             Window.ReplyBannerPreview.Text = "Sticker"
             Window.ReplyBannerThumb.Image = content
             Window.ReplyBannerThumb.Visible = true
         else
+            -- Sin thumbnail: solo dejar espacio para el botón cancel (24px + márgenes)
+            Window.ReplyBannerTitle.Size   = UDim2.new(1, -50, 0, 14)
+            Window.ReplyBannerPreview.Size = UDim2.new(1, -50, 0, 13)
             Window.ReplyBannerPreview.Text = tostring(content):sub(1, 60)
             Window.ReplyBannerThumb.Visible = false
         end
@@ -13886,11 +13892,20 @@ end
     		})
 
     		-- MANTENER PRESIONADO (0.6s) PARA RESPONDER — estilo WhatsApp
+    		-- StickerFrame.Active NO se pone en true → el toque pasa al ScrollingFrame
+    		-- y el scroll no queda bloqueado. Usamos UIS + hit-test manual.
     		local stickerHoldActive = false
-    		StickerFrame.Active = true
-    		StickerFrame.InputBegan:Connect(function(input)
-    			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+    		local touchStartPos = nil
+    		local uisBeganConn = UserInputService.InputBegan:Connect(function(input)
+    			if input.UserInputType ~= Enum.UserInputType.Touch and
+    			   input.UserInputType ~= Enum.UserInputType.MouseButton1 then return end
+    			local absPos  = StickerFrame.AbsolutePosition
+    			local absSize = StickerFrame.AbsoluteSize
+    			local p = input.Position
+    			if p.X >= absPos.X and p.X <= absPos.X + absSize.X and
+    			   p.Y >= absPos.Y and p.Y <= absPos.Y + absSize.Y then
     				stickerHoldActive = true
+    				touchStartPos = p
     				task.delay(0.6, function()
     					if stickerHoldActive then
     						Window.SetReplyTarget(isSelf and "Tú" or tostring(playerName), "sticker", stickerAsset)
@@ -13898,10 +13913,27 @@ end
     				end)
     			end
     		end)
-    		StickerFrame.InputEnded:Connect(function(input)
-    			if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-    				stickerHoldActive = false
+    		local uisChangedConn = UserInputService.InputChanged:Connect(function(input)
+    			if stickerHoldActive and touchStartPos and
+    			   (input.UserInputType == Enum.UserInputType.Touch or
+    			    input.UserInputType == Enum.UserInputType.MouseButton1) then
+    				-- Si el dedo se movió >8px en Y es un scroll, cancelar el hold
+    				if math.abs(input.Position.Y - touchStartPos.Y) > 8 then
+    					stickerHoldActive = false
+    				end
     			end
+    		end)
+    		local uisEndedConn = UserInputService.InputEnded:Connect(function(input)
+    			if input.UserInputType == Enum.UserInputType.Touch or
+    			   input.UserInputType == Enum.UserInputType.MouseButton1 then
+    				stickerHoldActive = false
+    				touchStartPos = nil
+    			end
+    		end)
+    		StickerFrame.Destroying:Connect(function()
+    			uisBeganConn:Disconnect()
+    			uisChangedConn:Disconnect()
+    			uisEndedConn:Disconnect()
     		end)
 
     		ScrollChatToBottom(isSelf)
