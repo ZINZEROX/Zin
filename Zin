@@ -3996,14 +3996,21 @@ function YinYang:CreateWindow(title_text, startTheme)
 
     Window.RefreshComboLabel = function()
         if not Window.ComboSlot then return end
+        local text
         if #Window.ComboMembers == 0 then
-            Window.ComboSlot.Label.Text = GetText("Vacío", "Empty")
+            text = GetText("Vacío", "Empty")
         else
             local initials = {}
             for _, member in ipairs(Window.ComboMembers) do
                 table.insert(initials, member.Initial)
             end
-            Window.ComboSlot.Label.Text = table.concat(initials, "+")
+            text = table.concat(initials, "+")
+        end
+        Window.ComboSlot.Label.Text = text
+        --// Si el toggle combinado está flotando, su ventana muestra las
+        --// mismas iniciales (no el título "Combinado (prueba)").
+        if Window.ComboSlot.FloatLabel then
+            Window.ComboSlot.FloatLabel.Text = text
         end
     end
 
@@ -4478,8 +4485,8 @@ function YinYang:CreateWindow(title_text, startTheme)
             local isInCombo = false
             local ComboBtn = mk("ImageButton", {
                 Parent = Holder,
-                Size = UDim2.new(0, 26, 0, 26),
-                Position = UDim2.new(1, -192, 0, 19),
+                Size = UDim2.new(0, 22, 0, 22),
+                Position = UDim2.new(1, -192, 0, 21),
                 BackgroundColor3 = Theme.Secondary,
                 Image = "rbxassetid://114334068728895",
                 ImageColor3 = Theme.TextDim,
@@ -5118,12 +5125,17 @@ function YinYang:CreateWindow(title_text, startTheme)
                 stroke(FloatingWindow, Theme.Accent, isCircleStyle and 3 or 2.5, 0.20)
                 buildAnimatedBorder(FloatingWindow, Theme.Accent, UDim.new(1, 0), true)
 
+                --// Acá va lo mismo que muestra ComboLabel en la pestaña (las
+                --// iniciales de las opciones combinadas, ej "C+M+S+A"), no el
+                --// título "Combinado (prueba)". Por eso NO lleva TextSpanish/
+                --// TextEnglish: si los llevara, RefreshLibraryLanguage lo
+                --// pisaría con el título al cambiar de idioma.
                 local FloatLabel = mk("TextLabel", {
                     Parent = FloatingWindow,
                     Size = isCircleStyle and UDim2.new(1, -24, 1, -24) or UDim2.new(1, -24, 1, 0),
                     Position = isCircleStyle and UDim2.new(0, 12, 0, 12) or UDim2.new(0, 12, 0, 0),
                     BackgroundTransparency = 1,
-                    Text = displayText,
+                    Text = ComboLabel.Text,
                     TextColor3 = Theme.Text,
                     Font = Enum.Font.GothamBlack,
                     TextSize = isCircleStyle and 11 or 21,
@@ -5134,8 +5146,9 @@ function YinYang:CreateWindow(title_text, startTheme)
                     ZIndex = 5,
                 })
                 FloatLabel:SetAttribute("ThemeTextRole", "Text")
-                FloatLabel:SetAttribute("TextSpanish", textSpanish)
-                FloatLabel:SetAttribute("TextEnglish", textEnglish)
+                if Window.ComboSlot then
+                    Window.ComboSlot.FloatLabel = FloatLabel
+                end
 
                 local function updateFloatVisual()
                     if state then
@@ -5261,6 +5274,9 @@ function YinYang:CreateWindow(title_text, startTheme)
                     if FloatingGlow then
                         FloatingGlow:Destroy()
                         FloatingGlow = nil
+                    end
+                    if Window.ComboSlot then
+                        Window.ComboSlot.FloatLabel = nil
                     end
                     DetachBtn.Text = "↗"
                     isLocked = false
@@ -18037,7 +18053,7 @@ end)()
 --// - Para DESACTIVAR: Cambia "DEMO_ACTIVO" a false
 --// ============================================================
 
-local DEMO_ACTIVO = false  -- Demo activada
+local DEMO_ACTIVO = false -- Demo activada
 
 if DEMO_ACTIVO then
     task.wait(0.5)
