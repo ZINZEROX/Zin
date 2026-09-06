@@ -4903,10 +4903,14 @@ function YinYang:CreateWindow(title_text, startTheme)
             local textEnglish = type(textEnglishOrDefault) == "string" and textEnglishOrDefault or textSpanish
             local displayText = GetText(textSpanish, textEnglish)
             local state = false
+            local isFloating = false
+            local isLocked = false
 
+            --// Altura aumentada (64 -> 80) para dar lugar a la fila de botones
+            --// Desprender/Candado, igual que en CreateFloatingToggle.
             local Holder = mk("Frame", {
                 Parent = TabPage,
-                Size = UDim2.new(1, 0, 0, 64),
+                Size = UDim2.new(1, 0, 0, 80),
                 BackgroundColor3 = Theme.Secondary,
                 BackgroundTransparency = 0.7,
                 ZIndex = 9
@@ -4916,20 +4920,22 @@ function YinYang:CreateWindow(title_text, startTheme)
             local ComboStroke = stroke(Holder, Theme.Accent, 1.5, 0.15)
             ComboStroke:SetAttribute("ThemeRole", "Accent")
 
+            --// Barra de acento reescalada en proporción a la nueva altura del Holder
             local AccentBar = mk("Frame", {
                 Parent = Holder,
-                Size = UDim2.new(0, 4, 0, 44),
-                Position = UDim2.new(0, 10, 0.5, -22),
+                Size = UDim2.new(0, 4, 0, 56),
+                Position = UDim2.new(0, 10, 0.5, -28),
                 BackgroundColor3 = Theme.Accent,
                 ZIndex = 10
             })
             AccentBar:SetAttribute("ThemeRole", "Accent")
             corner(AccentBar, 999)
 
+            --// Icono reducido (18x18 -> 14x14) a pedido, recentrado con la nueva medida
             local BadgeIcon = mk("ImageLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 18, 0, 18),
-                Position = UDim2.new(0, 24, 0, 9),
+                Size = UDim2.new(0, 14, 0, 14),
+                Position = UDim2.new(0, 24, 0, 10),
                 BackgroundTransparency = 1,
                 Image = "rbxassetid://114334068728895",
                 ImageColor3 = Theme.Accent,
@@ -4969,11 +4975,42 @@ function YinYang:CreateWindow(title_text, startTheme)
             })
             ComboLabel:SetAttribute("ThemeTextRole", "Accent")
 
-            --// Switch — misma mecánica que un toggle normal
+            --// Botón Desprender — ↗ hace flotante este toggle combinado.
+            --// Mismo diseño y posición relativa que en CreateFloatingToggle.
+            local DetachBtn = mk("TextButton", {
+                Parent = Holder,
+                Size = UDim2.new(0, 26, 0, 26),
+                Position = UDim2.new(1, -126, 0, 19),
+                BackgroundColor3 = Theme.Accent,
+                Text = "↗",
+                TextColor3 = Color3.fromRGB(0, 0, 0),
+                Font = Enum.Font.GothamBold,
+                TextSize = 13,
+                ZIndex = 15
+            })
+            corner(DetachBtn, 6)
+
+            --// Botón Fijar — candado real (igual que en CreateFloatingToggle)
+            local PinBtn = mk("ImageButton", {
+                Parent = Holder,
+                Size = UDim2.new(0, 26, 0, 26),
+                Position = UDim2.new(1, -96, 0, 19),
+                BackgroundColor3 = Theme.Secondary,
+                Image = "rbxassetid://83537941312438",  -- candado abierto
+                ImageColor3 = Theme.Text,
+                ScaleType = Enum.ScaleType.Stretch,
+                ZIndex = 15
+            })
+            corner(PinBtn, 6)
+            stroke(PinBtn, Theme.Stroke, 1, 0.5)
+
+            --// Switch — misma mecánica que un toggle normal.
+            --// Posición fijada arriba (antes usaba 0.5,-14 centrado) para que
+            --// quede alineada con Desprender/Candado, igual que en CreateFloatingToggle.
             local Switch = mk("Frame", {
                 Parent = Holder,
                 Size = UDim2.new(0, 52, 0, 28),
-                Position = UDim2.new(1, -66, 0.5, -14),
+                Position = UDim2.new(1, -66, 0, 18),
                 BackgroundColor3 = Theme.AccentOff,
                 ZIndex = 10
             })
@@ -5010,14 +5047,238 @@ function YinYang:CreateWindow(title_text, startTheme)
                 Switch:SetAttribute("ThemeRole", newState and "Accent" or "AccentOff")
             end
 
+            local function fireComboMembers(newState)
+                for _, member in ipairs(Window.ComboMembers) do
+                    pcall(member.SetState, newState)
+                end
+            end
+
             Click.MouseButton1Click:Connect(function()
                 state = not state
                 playSound(Sounds.Click, 0.5)
                 applyVisual(state, true)
-                for _, member in ipairs(Window.ComboMembers) do
-                    pcall(member.SetState, state)
-                end
+                fireComboMembers(state)
             end)
+
+            --// ═════════════════════════════════════════════════════════════════════════
+            --// VENTANA FLOTANTE — mismo patrón exacto que Tab:CreateFloatingToggle
+            --// (clamp de viewport, drag, candado, glow, estilo Pill/Circle).
+            --// ═════════════════════════════════════════════════════════════════════════
+            local FloatingWindow = nil
+            local FloatingGlow = nil
+
+            local function createFloatingWindow()
+                local floatStyle    = SavedConfig.FloatingToggleStyle or "Pill"
+                local isCircleStyle = (floatStyle == "Circle")
+                local floatW = isCircleStyle and 64 or 200
+                local floatH = isCircleStyle and 64 or 36
+
+                FloatingGlow = mk("Frame", {
+                    Parent = Window.ScreenGui,
+                    Size = UDim2.fromOffset(216, 48),
+                    Position = UDim2.new(0.5, -108, 0.5, -24),
+                    BackgroundColor3 = Theme.Accent,
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = 3
+                })
+                corner(FloatingGlow, 999)
+
+                FloatingWindow = mk("Frame", {
+                    Parent = Window.ScreenGui,
+                    Size = UDim2.fromOffset(floatW, floatH),
+                    Position = UDim2.new(0.5, -floatW/2, 0.5, -floatH/2),
+                    BackgroundColor3 = isCircleStyle and Color3.fromRGB(20, 20, 26) or Theme.Secondary,
+                    BackgroundTransparency = isCircleStyle and 0.55 or 0.30,
+                    BorderSizePixel = 0,
+                    Active = true,
+                    Selectable = false,
+                    ZIndex = 4
+                })
+                FloatingWindow:SetAttribute("ThemeRole", "Secondary")
+                FloatingWindow:SetAttribute("SupportsFloatStyle", true)
+                corner(FloatingWindow, 999)
+
+                if not isCircleStyle then
+                    mk("UIGradient", {
+                        Color = ColorSequence.new({
+                            ColorSequenceKeypoint.new(0,   Color3.fromRGB(180, 185, 200)),
+                            ColorSequenceKeypoint.new(0.5, Color3.fromRGB(240, 243, 250)),
+                            ColorSequenceKeypoint.new(1,   Color3.fromRGB(180, 185, 200)),
+                        }),
+                        Transparency = NumberSequence.new({
+                            NumberSequenceKeypoint.new(0,   0.45),
+                            NumberSequenceKeypoint.new(0.5, 0.15),
+                            NumberSequenceKeypoint.new(1,   0.45),
+                        }),
+                        Rotation = 90,
+                    }, FloatingWindow)
+                end
+
+                stroke(FloatingWindow, Theme.Accent, isCircleStyle and 3 or 2.5, 0.20)
+                buildAnimatedBorder(FloatingWindow, Theme.Accent, UDim.new(1, 0), true)
+
+                local FloatLabel = mk("TextLabel", {
+                    Parent = FloatingWindow,
+                    Size = isCircleStyle and UDim2.new(1, -24, 1, -24) or UDim2.new(1, -24, 1, 0),
+                    Position = isCircleStyle and UDim2.new(0, 12, 0, 12) or UDim2.new(0, 12, 0, 0),
+                    BackgroundTransparency = 1,
+                    Text = displayText,
+                    TextColor3 = Theme.Text,
+                    Font = Enum.Font.GothamBlack,
+                    TextSize = isCircleStyle and 11 or 21,
+                    TextWrapped = isCircleStyle,
+                    TextXAlignment = Enum.TextXAlignment.Center,
+                    TextYAlignment = Enum.TextYAlignment.Center,
+                    TextTruncate = isCircleStyle and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd,
+                    ZIndex = 5,
+                })
+                FloatLabel:SetAttribute("ThemeTextRole", "Text")
+                FloatLabel:SetAttribute("TextSpanish", textSpanish)
+                FloatLabel:SetAttribute("TextEnglish", textEnglish)
+
+                local function updateFloatVisual()
+                    if state then
+                        TweenService:Create(FloatingWindow, TweenInfo.new(0.15),
+                            {BackgroundColor3 = Theme.ToggleOn}):Play()
+                    else
+                        TweenService:Create(FloatingWindow, TweenInfo.new(0.15),
+                            {BackgroundColor3 = Theme.Secondary}):Play()
+                    end
+                end
+                updateFloatVisual()
+
+                local dragging = false
+                local dragStart, startPos
+                local dragMoved = false
+
+                local FloatClick = mk("TextButton", {
+                    Parent = FloatingWindow,
+                    Size = UDim2.new(1, 0, 1, 0),
+                    BackgroundTransparency = 1,
+                    Text = "",
+                    AutoButtonColor = false,
+                    Active = true,
+                    Selectable = false,
+                    ZIndex = 6
+                })
+
+                FloatClick.MouseButton1Click:Connect(function()
+                    if dragging then return end
+                    state = not state
+                    playSound(Sounds.Click, 0.5)
+                    updateFloatVisual()
+                    applyVisual(state, true)
+                    fireComboMembers(state)
+                end)
+
+                local function syncGlow()
+                    if FloatingGlow and FloatingGlow.Parent then
+                        FloatingGlow.Size = UDim2.fromOffset(FloatingWindow.Size.X.Offset + 16, FloatingWindow.Size.Y.Offset + 12)
+                        FloatingGlow.Position = UDim2.new(FloatingWindow.Position.X.Scale, FloatingWindow.Position.X.Offset - 8, FloatingWindow.Position.Y.Scale, FloatingWindow.Position.Y.Offset - 6)
+                    end
+                end
+                syncGlow()
+                track(FloatingWindow:GetPropertyChangedSignal("Position"):Connect(syncGlow))
+
+                local function clampFloatingWindow()
+                    if not FloatingWindow or not FloatingWindow.Parent then return end
+
+                    local viewport = Window.ScreenGui.AbsoluteSize
+                    local windowSize = FloatingWindow.AbsoluteSize
+                    if viewport.X <= 0 or viewport.Y <= 0 or windowSize.X <= 0 or windowSize.Y <= 0 then
+                        return
+                    end
+
+                    local margin = 8
+                    local pos = FloatingWindow.Position
+                    local minX = margin - pos.X.Scale * viewport.X
+                    local maxX = viewport.X - windowSize.X - margin - pos.X.Scale * viewport.X
+                    local minY = margin - pos.Y.Scale * viewport.Y
+                    local maxY = viewport.Y - windowSize.Y - margin - pos.Y.Scale * viewport.Y
+
+                    local clampedX = maxX < minX and ((viewport.X - windowSize.X) / 2) - pos.X.Scale * viewport.X
+                        or math.clamp(pos.X.Offset, minX, maxX)
+                    local clampedY = maxY < minY and ((viewport.Y - windowSize.Y) / 2) - pos.Y.Scale * viewport.Y
+                        or math.clamp(pos.Y.Offset, minY, maxY)
+
+                    if clampedX ~= pos.X.Offset or clampedY ~= pos.Y.Offset then
+                        FloatingWindow.Position = UDim2.new(pos.X.Scale, clampedX, pos.Y.Scale, clampedY)
+                    end
+                end
+
+                clampFloatingWindow()
+                track(Window.ScreenGui:GetPropertyChangedSignal("AbsoluteSize"):Connect(clampFloatingWindow))
+
+                FloatClick.InputBegan:Connect(function(input)
+                    if (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) and not isLocked then
+                        dragging = false
+                        dragMoved = false
+                        dragStart = input.Position
+                        startPos = FloatingWindow.Position
+                    end
+                end)
+
+                track(UserInputService.InputChanged:Connect(function(input)
+                    if dragStart and not isLocked and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+                        local delta = input.Position - dragStart
+                        if delta.Magnitude > 4 then
+                            dragging = true
+                            dragMoved = true
+                            FloatingWindow.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+                            clampFloatingWindow()
+                        end
+                    end
+                end))
+
+                track(UserInputService.InputEnded:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+                        task.defer(function() dragging = false end)
+                        dragStart = nil
+                    end
+                end))
+
+                table.insert(Window.FloatingToggles, {
+                    Window = FloatingWindow,
+                    Name = displayText,
+                    RefreshVisual = updateFloatVisual,
+                    ClampPosition = clampFloatingWindow,
+                })
+            end
+
+            local toggleFloating = function()
+                playSound(Sounds.Click, 0.6)
+                if not isFloating then
+                    isFloating = true
+                    createFloatingWindow()
+                    DetachBtn.Text = "←"
+                else
+                    isFloating = false
+                    if FloatingWindow then
+                        FloatingWindow:Destroy()
+                        FloatingWindow = nil
+                    end
+                    if FloatingGlow then
+                        FloatingGlow:Destroy()
+                        FloatingGlow = nil
+                    end
+                    DetachBtn.Text = "↗"
+                    isLocked = false
+                    PinBtn.Image = "rbxassetid://83537941312438"  -- candado abierto al cerrar
+                end
+            end
+
+            --// Candado: toggle entre fijado (cerrado) y libre (abierto)
+            local toggleLock = function()
+                if not isFloating then return end
+                playSound(Sounds.Click, 0.5)
+                isLocked = not isLocked
+                PinBtn.Image = isLocked
+                    and "rbxassetid://91959170037380"   -- candado cerrado (fijado)
+                    or  "rbxassetid://83537941312438"   -- candado abierto (libre)
+            end
+            DetachBtn.MouseButton1Click:Connect(toggleFloating)
+            PinBtn.MouseButton1Click:Connect(toggleLock)
 
             Window.ComboSlot = {
                 Holder = Holder,
@@ -17776,7 +18037,7 @@ end)()
 --// - Para DESACTIVAR: Cambia "DEMO_ACTIVO" a false
 --// ============================================================
 
-local DEMO_ACTIVO = true  -- Demo activada
+local DEMO_ACTIVO = false  -- Demo activada
 
 if DEMO_ACTIVO then
     task.wait(0.5)
