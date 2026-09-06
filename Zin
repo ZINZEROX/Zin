@@ -3984,6 +3984,44 @@ function YinYang:CreateWindow(title_text, startTheme)
         return entry
     end
 
+    --// ════════════════════════════════════════════════════════════════
+    --// SISTEMA DE TOGGLE COMBINADO
+    --// El jugador elige QUÉ opciones se combinan (tocando el cuadrado en
+    --// cada una). El desarrollador solo decide DÓNDE vive el toggle
+    --// combinado, llamando a Tab:CreateCombinedToggle(...) donde quiera.
+    --// Solo existe UN slot combinado activo por ventana.
+    --// ════════════════════════════════════════════════════════════════
+    Window.ComboMembers = {}
+    Window.ComboSlot = nil
+
+    Window.RefreshComboLabel = function()
+        if not Window.ComboSlot then return end
+        if #Window.ComboMembers == 0 then
+            Window.ComboSlot.Label.Text = GetText("Vacío", "Empty")
+        else
+            local initials = {}
+            for _, member in ipairs(Window.ComboMembers) do
+                table.insert(initials, member.Initial)
+            end
+            Window.ComboSlot.Label.Text = table.concat(initials, "+")
+        end
+    end
+
+    Window.AddComboMember = function(member)
+        table.insert(Window.ComboMembers, member)
+        Window.RefreshComboLabel()
+    end
+
+    Window.RemoveComboMember = function(member)
+        for i, m in ipairs(Window.ComboMembers) do
+            if m == member then
+                table.remove(Window.ComboMembers, i)
+                break
+            end
+        end
+        Window.RefreshComboLabel()
+    end
+
     track(UserInputService.InputBegan:Connect(function(input, _gameProcessedEvent)
         local capture = Window._keybindCapture
         if capture then
@@ -4434,6 +4472,24 @@ function YinYang:CreateWindow(title_text, startTheme)
                 ZIndex = 15
             })
 
+            --// Botón Combo — cuadrado, suma/saca esta opción del toggle combinado.
+            --// El toggle combinado en sí lo crea el desarrollador con Tab:CreateCombinedToggle;
+            --// este botón solo lo elige el jugador en runtime, en cualquier toggle flotante.
+            local isInCombo = false
+            local ComboBtn = mk("ImageButton", {
+                Parent = Holder,
+                Size = UDim2.new(0, 26, 0, 26),
+                Position = UDim2.new(1, -192, 0, 19),
+                BackgroundColor3 = Theme.Secondary,
+                Image = "rbxassetid://114334068728895",
+                ImageColor3 = Theme.TextDim,
+                ScaleType = Enum.ScaleType.Fit,
+                ZIndex = 15
+            })
+            corner(ComboBtn, 6)
+            stroke(ComboBtn, Theme.Stroke, 1, 0.5)
+            ComboBtn:SetAttribute("ThemeImageRole", "TextDim")
+
             --// Botón de tecla: queda debajo de estrella, candado y desprender.
             local KeybindBtn = mk("TextButton", {
                 Parent = Holder,
@@ -4517,6 +4573,32 @@ function YinYang:CreateWindow(title_text, startTheme)
                 SavedFavoriteIds[favId] = isFavorite or nil
                 syncFavoriteRow()
                 SyncFavoritesToConfig()
+            end)
+
+            --// Esta opción, tal como la ve el sistema de combo: activarla llama al
+            --// SetValue del toggle (visual) + al callback real del desarrollador (cb),
+            --// exactamente igual que si el jugador la hubiese tocado a mano.
+            local comboMember = {
+                Initial = displayText:sub(1, 1):upper(),
+                DisplayName = displayText,
+                GetState = function() return state end,
+                SetState = function(newState)
+                    state = newState
+                    tog.SetValue(newState)
+                    pcall(cb, newState)
+                end,
+            }
+
+            ComboBtn.MouseButton1Click:Connect(function()
+                playSound(Sounds.Click, 0.5)
+                isInCombo = not isInCombo
+                ComboBtn.ImageColor3 = isInCombo and Theme.Accent or Theme.TextDim
+                ComboBtn:SetAttribute("ThemeImageRole", isInCombo and "Accent" or "TextDim")
+                if isInCombo then
+                    Window.AddComboMember(comboMember)
+                else
+                    Window.RemoveComboMember(comboMember)
+                end
             end)
 
             Window.RegisterKeybind(favId, KeybindBtn, function()
@@ -4809,6 +4891,147 @@ function YinYang:CreateWindow(title_text, startTheme)
             resetScrollTop(TabPage)
         end
 
+
+        --// ════════════════════════════════════════════════════════════════
+        --// TOGGLE COMBINADO — el desarrollador decide acá mismo, con el orden
+        --// y la pestaña en que llama a esta función, dónde vive. El jugador
+        --// después elige QUÉ opciones se le suman tocando el ⬜ en cada toggle.
+        --// Diseño único (borde de acento + insignia) para que se distinga de
+        --// un toggle normal a simple vista.
+        --// ════════════════════════════════════════════════════════════════
+        function Tab:CreateCombinedToggle(textSpanish, textEnglishOrDefault)
+            local textEnglish = type(textEnglishOrDefault) == "string" and textEnglishOrDefault or textSpanish
+            local displayText = GetText(textSpanish, textEnglish)
+            local state = false
+
+            local Holder = mk("Frame", {
+                Parent = TabPage,
+                Size = UDim2.new(1, 0, 0, 64),
+                BackgroundColor3 = Theme.Secondary,
+                BackgroundTransparency = 0.7,
+                ZIndex = 9
+            })
+            Holder:SetAttribute("ThemeRole", "Secondary")
+            corner(Holder, 10)
+            local ComboStroke = stroke(Holder, Theme.Accent, 1.5, 0.15)
+            ComboStroke:SetAttribute("ThemeRole", "Accent")
+
+            local AccentBar = mk("Frame", {
+                Parent = Holder,
+                Size = UDim2.new(0, 4, 0, 44),
+                Position = UDim2.new(0, 10, 0.5, -22),
+                BackgroundColor3 = Theme.Accent,
+                ZIndex = 10
+            })
+            AccentBar:SetAttribute("ThemeRole", "Accent")
+            corner(AccentBar, 999)
+
+            local BadgeIcon = mk("ImageLabel", {
+                Parent = Holder,
+                Size = UDim2.new(0, 18, 0, 18),
+                Position = UDim2.new(0, 24, 0, 9),
+                BackgroundTransparency = 1,
+                Image = "rbxassetid://114334068728895",
+                ImageColor3 = Theme.Accent,
+                ScaleType = Enum.ScaleType.Fit,
+                ZIndex = 10
+            })
+            BadgeIcon:SetAttribute("ThemeImageRole", "Accent")
+
+            local LabelTxt = mk("TextLabel", {
+                Parent = Holder,
+                Size = UDim2.new(1, -170, 0, 18),
+                Position = UDim2.new(0, 48, 0, 8),
+                BackgroundTransparency = 1,
+                Text = displayText,
+                TextColor3 = Theme.Text,
+                Font = Enum.Font.GothamBlack,
+                TextSize = 13,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                ZIndex = 10
+            })
+            LabelTxt:SetAttribute("ThemeTextRole", "Text")
+
+            --// Acá se muestran las iniciales de las opciones combinadas (ej: "E+L+O")
+            local ComboLabel = mk("TextLabel", {
+                Parent = Holder,
+                Size = UDim2.new(1, -90, 0, 22),
+                Position = UDim2.new(0, 24, 0, 30),
+                BackgroundTransparency = 1,
+                Text = GetText("Vacío", "Empty"),
+                TextColor3 = Theme.Accent,
+                Font = Enum.Font.GothamBold,
+                TextSize = 16,
+                TextXAlignment = Enum.TextXAlignment.Left,
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                ZIndex = 10
+            })
+            ComboLabel:SetAttribute("ThemeTextRole", "Accent")
+
+            --// Switch — misma mecánica que un toggle normal
+            local Switch = mk("Frame", {
+                Parent = Holder,
+                Size = UDim2.new(0, 52, 0, 28),
+                Position = UDim2.new(1, -66, 0.5, -14),
+                BackgroundColor3 = Theme.AccentOff,
+                ZIndex = 10
+            })
+            Switch:SetAttribute("ThemeRole", "AccentOff")
+            corner(Switch, 999)
+
+            local Knob = mk("Frame", {
+                Parent = Switch,
+                Size = UDim2.new(0, 24, 0, 24),
+                Position = UDim2.new(0, 2, 0.5, -12),
+                BackgroundColor3 = Color3.new(1, 1, 1),
+                ZIndex = 12
+            })
+            corner(Knob, 999)
+
+            local Click = mk("TextButton", {
+                Parent = Holder,
+                Size = UDim2.new(1, 0, 1, 0),
+                BackgroundTransparency = 1,
+                Text = "",
+                ZIndex = 13
+            })
+
+            local function applyVisual(newState, animate)
+                local knobPos = newState and UDim2.new(1, -26, 0.5, -12) or UDim2.new(0, 2, 0.5, -12)
+                local trackColor = newState and Theme.Accent or Theme.AccentOff
+                if animate then
+                    TweenService:Create(Knob, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = knobPos}):Play()
+                    TweenService:Create(Switch, TweenInfo.new(0.18, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {BackgroundColor3 = trackColor}):Play()
+                else
+                    Knob.Position = knobPos
+                    Switch.BackgroundColor3 = trackColor
+                end
+                Switch:SetAttribute("ThemeRole", newState and "Accent" or "AccentOff")
+            end
+
+            Click.MouseButton1Click:Connect(function()
+                state = not state
+                playSound(Sounds.Click, 0.5)
+                applyVisual(state, true)
+                for _, member in ipairs(Window.ComboMembers) do
+                    pcall(member.SetState, state)
+                end
+            end)
+
+            Window.ComboSlot = {
+                Holder = Holder,
+                Label = ComboLabel,
+            }
+            Window.RefreshComboLabel()
+
+            resetScrollTop(TabPage)
+
+            return {
+                Holder = Holder,
+                Switch = Switch,
+            }
+        end
 
         --// TOGGLE ESTÁNDAR — Premium Redesign
         function Tab:CreateToggle(textSpanish, textEnglishOrDefault, defaultOrCallback, callback, isMirror)
@@ -17553,7 +17776,7 @@ end)()
 --// - Para DESACTIVAR: Cambia "DEMO_ACTIVO" a false
 --// ============================================================
 
-local DEMO_ACTIVO = false  -- Demo activada
+local DEMO_ACTIVO = true  -- Demo activada
 
 if DEMO_ACTIVO then
     task.wait(0.5)
