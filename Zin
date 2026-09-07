@@ -16973,8 +16973,9 @@ end
         local playerRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if playerRoot then
             sound.RollOffMode = Enum.RollOffMode.Linear
+            sound.MinDistance = 5
             sound.MaxDistance = 500
-            sound.Volume = SpotifyState.PlaybackVolume * 1.5
+            sound.Volume = SpotifyState.PlaybackVolume * 3
             sound.Parent = playerRoot
         else
             sound.Volume = SpotifyState.PlaybackVolume
@@ -19419,8 +19420,9 @@ if DEMO_ACTIVO then
         local playerRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if playerRoot then
             sound.RollOffMode = Enum.RollOffMode.Linear
+            sound.MinDistance = 5
             sound.MaxDistance = 500
-            sound.Volume = SpotifyState.PlaybackVolume * 1.5
+            sound.Volume = SpotifyState.PlaybackVolume * 3
             sound.Parent = playerRoot
         else
             sound.Volume = SpotifyState.PlaybackVolume
