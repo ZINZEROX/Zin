@@ -16970,7 +16970,13 @@ end
         sound.Volume = SpotifyState.PlaybackVolume
         sound.PlaybackSpeed = SpotifyState.PlaybackSpeed
         sound.Looped = SpotifyState.IsRepeat
-        sound.Parent = workspace
+        
+        local playerRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if playerRoot then
+            sound.Parent = playerRoot
+        else
+            sound.Parent = workspace
+        end
 
         SpotifyState.CurrentSound = sound
 
@@ -19407,7 +19413,13 @@ if DEMO_ACTIVO then
         sound.Volume = SpotifyState.PlaybackVolume
         sound.PlaybackSpeed = SpotifyState.PlaybackSpeed
         sound.Looped = SpotifyState.IsRepeat
-        sound.Parent = workspace
+        
+        local playerRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+        if playerRoot then
+            sound.Parent = playerRoot
+        else
+            sound.Parent = workspace
+        end
 
         SpotifyState.CurrentSound = sound
 
