@@ -16967,14 +16967,17 @@ end
         local sound = Instance.new("Sound")
         sound.Name = "YY_Spotify_CurrentSound"
         sound.SoundId = soundAsset
-        sound.Volume = SpotifyState.PlaybackVolume
         sound.PlaybackSpeed = SpotifyState.PlaybackSpeed
         sound.Looped = SpotifyState.IsRepeat
         
         local playerRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if playerRoot then
+            sound.RollOffMode = Enum.RollOffMode.Linear
+            sound.MaxDistance = 500
+            sound.Volume = SpotifyState.PlaybackVolume * 1.5
             sound.Parent = playerRoot
         else
+            sound.Volume = SpotifyState.PlaybackVolume
             sound.Parent = workspace
         end
 
@@ -19410,14 +19413,17 @@ if DEMO_ACTIVO then
         local sound = Instance.new("Sound")
         sound.Name = "YY_Spotify_CurrentSound"
         sound.SoundId = soundAsset
-        sound.Volume = SpotifyState.PlaybackVolume
         sound.PlaybackSpeed = SpotifyState.PlaybackSpeed
         sound.Looped = SpotifyState.IsRepeat
         
         local playerRoot = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if playerRoot then
+            sound.RollOffMode = Enum.RollOffMode.Linear
+            sound.MaxDistance = 500
+            sound.Volume = SpotifyState.PlaybackVolume * 1.5
             sound.Parent = playerRoot
         else
+            sound.Volume = SpotifyState.PlaybackVolume
             sound.Parent = workspace
         end
 
