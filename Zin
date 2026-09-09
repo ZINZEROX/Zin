@@ -3025,21 +3025,30 @@ function YinYang:CreateWindow(title_text, startTheme)
     local function shutdownUI()
         if closingUI then return end
         closingUI = true
+        Window._Destroying = true
+
+        --// Primero avisar a los consumidores externos para que apaguen sus
+        --// loops/opciones y restauren su propio estado antes de destruir la UI.
+        for index = #Window._DestroyCallbacks, 1, -1 do
+            pcall(Window._DestroyCallbacks[index])
+            Window._DestroyCallbacks[index] = nil
+        end
 
         setRobloxCoreVisible(true)
         if BoomboxSound then
             pcall(function() BoomboxSound:Stop() BoomboxSound:Destroy() end)
             BoomboxSound = nil
         end
+        for index = #SoundPool, 1, -1 do
+            pcall(function() SoundPool[index]:Destroy() end)
+            SoundPool[index] = nil
+        end
+        poolCursor = 0
         for _, conn in ipairs(globalConnections) do
             pcall(function() conn:Disconnect() end)
         end
         pcall(function() dragonConnection:Disconnect() end)
         pcall(function() ScreenGui:Destroy() end)
-        -- Notificar al script externo para que limpie sus propios loops y Config
-        if Window and type(Window.OnClose) == "function" then
-            pcall(Window.OnClose)
-        end
     end
 
     local WindowControls = mk("Frame", {
@@ -3586,7 +3595,6 @@ function YinYang:CreateWindow(title_text, startTheme)
     --// Window debe existir antes de inicializar el rail compacto, porque este registra
     --// sus métodos de refresco y las tabs creadas posteriormente los reutilizan.
     Window = setmetatable({}, ZeroUI)
-    Window.OnClose = nil  -- Callback externo; se llama cuando el botón X cierra la UI
     Window.Tabs = {}
     Window.Assets = Assets
     Window.CurrentTheme = startTheme
@@ -3594,7 +3602,37 @@ function YinYang:CreateWindow(title_text, startTheme)
     Window.FloatingToggles = {}
     Window.Keybinds = {}
     Window._keybindCapture = nil
+    Window._Destroying = false
+    Window._DestroyCallbacks = {}
     Window.ScreenGui = ScreenGui
+
+    --// Registro de limpieza para módulos externos. Cerrar la X debe detener
+    --// también scripts/loops que viven fuera de la jerarquía de ScreenGui.
+    function Window:RegisterCleanup(callback)
+        if type(callback) ~= "function" then
+            return nil
+        end
+        if self._Destroying then
+            pcall(callback)
+            return callback
+        end
+        table.insert(self._DestroyCallbacks, callback)
+        return callback
+    end
+
+    Window:RegisterCleanup(function()
+        if logoRenderConn then
+            pcall(function() logoRenderConn:Disconnect() end)
+            logoRenderConn = nil
+        end
+        if logoIdleConn then
+            pcall(function() logoIdleConn:Disconnect() end)
+            logoIdleConn = nil
+        end
+        logoLayers = {}
+        toggleEyesOnClick = nil
+    end)
+
     Window.BackgroundArt = nil
 
     --// REGISTRO GLOBAL DE OPCIONES — una sola referencia por control original.
@@ -6963,9 +7001,9 @@ function YinYang:CreateWindow(title_text, startTheme)
             local spinnerSpin
             local function startSpinner()
                 Spinner.Visible = true
-                spinnerSpin = RunService.Heartbeat:Connect(function(dt)
+                spinnerSpin = track(RunService.Heartbeat:Connect(function(dt)
                     SpinnerGradient.Rotation = (SpinnerGradient.Rotation + dt * 360) % 360
-                end)
+                end))
             end
             local function stopSpinner()
                 if spinnerSpin then spinnerSpin:Disconnect(); spinnerSpin = nil end
@@ -9524,7 +9562,7 @@ function YinYang:CreateWindow(title_text, startTheme)
     --// Los TextBox y overlays no entran al refresco global de las páginas.
     --// Este tramo mantiene bilingües sus placeholders, mensajes y diálogos.
     local lastThemeEditorLanguage = LibraryLanguage
-    RunService.Heartbeat:Connect(function()
+    track(RunService.Heartbeat:Connect(function()
         local currentLanguage = LibraryLanguage
         if currentLanguage == lastThemeEditorLanguage then return end
         lastThemeEditorLanguage = currentLanguage
@@ -9546,7 +9584,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 end
             end
         end
-    end)
+    end))
 
     ThemeSearchBox:GetPropertyChangedSignal("Text"):Connect(applyThemeSearch)
     rebuildThemeCards()
@@ -11721,6 +11759,23 @@ do
         end
     end
 
+    Window:RegisterCleanup(function()
+        pcall(shaderDisconnectAll)
+        pcall(function() ShaderManager:Restore({}) end)
+        pcall(function() ShaderSilhouette:Destroy() end)
+        pcall(function() ShaderRain:Destroy() end)
+        ShaderReflections.Enabled = false
+        if ShaderReflections.Connection then
+            pcall(function() ShaderReflections.Connection:Disconnect() end)
+            ShaderReflections.Connection = nil
+        end
+        pcall(function() ShaderReflections:Restore() end)
+        pcall(function()
+            if ShaderCustomWindow then ShaderCustomWindow:Destroy() end
+            if ShaderCustomBackdrop then ShaderCustomBackdrop:Destroy() end
+        end)
+    end)
+
     local function shaderSetModeLabel(name)
         local modeKey = name
         local labelES = tostring(name)
@@ -13069,7 +13124,7 @@ end
     local function StartBackendPolling(onNewMessage)
         local initialSyncComplete = false
         task.spawn(function()
-            while true do
+            while not Window._Destroying do
                 local ok, response = pcall(function()
                     return UniversalRequest({
                         Url = BACKEND_URL .. "/api/chat/messages",
@@ -15147,9 +15202,11 @@ end
                 })
             end)
         end
+        if Window._Destroying then return end
         sendHeartbeat()         -- ping inmediato al cargar
-        while true do
+        while not Window._Destroying do
             task.wait(30)
+            if Window._Destroying then break end
             sendHeartbeat()
         end
     end)
@@ -15180,19 +15237,20 @@ end
     end
 
     local lastLanguage = LibraryLanguage
-    RunService.Heartbeat:Connect(function()
+    track(RunService.Heartbeat:Connect(function()
         if LibraryLanguage == lastLanguage then
             return
         end
         lastLanguage = LibraryLanguage
         RefreshLibraryLanguage()
-    end)
+    end))
 
     --// Algunos módulos se construyen después del primer Heartbeat; forzamos
     --// varios refrescos diferidos para que también nazcan en el idioma activo.
     task.defer(function()
         for _ = 1, 8 do
             task.wait(0.25)
+            if Window._Destroying then return end
             RefreshLibraryLanguage()
         end
     end)
@@ -16864,6 +16922,11 @@ end
             SpotifyState.CurrentSound = nil
         end
     end
+
+    Window:RegisterCleanup(function()
+        destroyCurrentSound()
+        destroyAllSpotifySounds()
+    end)
 
     local function syncPlaybackUI()
         if SpotifyState.CurrentSound then
@@ -19301,6 +19364,11 @@ if DEMO_ACTIVO then
             SpotifyState.CurrentSound = nil
         end
     end
+
+    Window:RegisterCleanup(function()
+        destroyCurrentSound()
+        destroyAllSpotifySounds()
+    end)
 
     local function syncPlaybackUI()
         if SpotifyState.CurrentSound then
