@@ -3036,6 +3036,10 @@ function YinYang:CreateWindow(title_text, startTheme)
         end
         pcall(function() dragonConnection:Disconnect() end)
         pcall(function() ScreenGui:Destroy() end)
+        -- Notificar al script externo para que limpie sus propios loops y Config
+        if Window and type(Window.OnClose) == "function" then
+            pcall(Window.OnClose)
+        end
     end
 
     local WindowControls = mk("Frame", {
@@ -3582,6 +3586,7 @@ function YinYang:CreateWindow(title_text, startTheme)
     --// Window debe existir antes de inicializar el rail compacto, porque este registra
     --// sus métodos de refresco y las tabs creadas posteriormente los reutilizan.
     Window = setmetatable({}, ZeroUI)
+    Window.OnClose = nil  -- Callback externo; se llama cuando el botón X cierra la UI
     Window.Tabs = {}
     Window.Assets = Assets
     Window.CurrentTheme = startTheme
