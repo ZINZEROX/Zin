@@ -5450,7 +5450,7 @@ function YinYang:CreateWindow(title_text, startTheme)
         end
 
         --// TOGGLE ESTÁNDAR — Premium Redesign
-        function Tab:CreateToggle(textSpanish, textEnglishOrDefault, defaultOrCallback, callback, isMirror)
+        function Tab:CreateToggle(textSpanish, textEnglishOrDefault, defaultOrCallback, callback, isMirror, creditInfo)
             --// COMPATIBILIDAD: si el 2do argumento es string, es modo bilingüe.
             --// Si es boolean/nil, es la firma antigua: (text, default, callback)
             local textEnglish = textSpanish
@@ -5468,10 +5468,19 @@ function YinYang:CreateWindow(title_text, startTheme)
             local displayText = GetText(textSpanish, textEnglish)
             local state = default or false
 
+            --// ── CRÉDITOS (parámetro opcional) ──────────────────────────────────────
+            --// Uso: Tab:CreateToggle(..., { imageId = "rbxassetid://...", name = "Nick", description = "Texto" })
+            --// Todos los campos de creditInfo son opcionales. Sin creditInfo el toggle es idéntico al actual.
+            local credit   = type(creditInfo) == "table" and creditInfo or nil
+            local hasBadge = credit and (credit.imageId or credit.name)   -- avatar circular + nombre
+            local hasDesc  = credit and type(credit.description) == "string" and #credit.description > 0
+            local holderH  = (hasDesc and hasBadge) and 110 or (hasDesc or hasBadge) and 90 or 64
+            local textOffW = hasBadge and -164 or -90  -- ancho libre del área de texto (más angosto si hay badge)
+
             --// ── CONTENEDOR PRINCIPAL ──────────────────────────────────────────────
             local Holder = mk("Frame", {
                 Parent = TabPage,
-                Size = UDim2.new(1, 0, 0, 64),
+                Size = UDim2.new(1, 0, 0, holderH),
                 BackgroundColor3 = Theme.Secondary,
                 BackgroundTransparency = 0.78,
                 ZIndex = 9
@@ -5495,7 +5504,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// ── TEXTO PRINCIPAL ───────────────────────────────────────────────────
             local LabelTxt = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(1, -90, 0, 22),
+                Size = UDim2.new(1, textOffW, 0, 22),
                 Position = UDim2.new(0, 22, 0, 13),
                 BackgroundTransparency = 1,
                 Text = displayText,
@@ -5511,9 +5520,10 @@ function YinYang:CreateWindow(title_text, startTheme)
             LabelTxt:SetAttribute("TextEnglish", textEnglish)
 
             --// ── SUBTEXTO DE ESTADO ────────────────────────────────────────────────
+            --// Oculto cuando hay descripción de crédito (la descripción ocupa ese espacio).
             local StateLabel = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(1, -90, 0, 16),
+                Size = UDim2.new(1, textOffW, 0, 16),
                 Position = UDim2.new(0, 22, 0, 36),
                 BackgroundTransparency = 1,
                 Text = state and GetText("Activado", "Enabled") or GetText("Desactivado", "Disabled"),
@@ -5521,9 +5531,29 @@ function YinYang:CreateWindow(title_text, startTheme)
                 Font = Enum.Font.Gotham,
                 TextSize = 11,
                 TextXAlignment = Enum.TextXAlignment.Left,
+                Visible = not hasDesc,
                 ZIndex = 10
             })
             StateLabel:SetAttribute("ThemeTextRole", state and "ToggleOn" or "TextDim")
+
+            --// ── DESCRIPCIÓN DE CRÉDITO (solo cuando creditInfo.description está definido) ──
+            --// Ocupa el espacio donde iría el StateLabel. Texto estático, multi-línea.
+            if hasDesc then
+                mk("TextLabel", {
+                    Parent = Holder,
+                    Size = UDim2.new(1, textOffW, 1, -50),
+                    Position = UDim2.new(0, 22, 0, 36),
+                    BackgroundTransparency = 1,
+                    Text = credit.description,
+                    TextColor3 = Theme.TextDim,
+                    Font = Enum.Font.Gotham,
+                    TextSize = 11,
+                    TextXAlignment = Enum.TextXAlignment.Left,
+                    TextYAlignment = Enum.TextYAlignment.Top,
+                    TextWrapped = true,
+                    ZIndex = 10
+                }):SetAttribute("ThemeTextRole", "TextDim")
+            end
 
             --// ── SWITCH TRACK (52×28) ──────────────────────────────────────────────
             local Switch = mk("Frame", {
@@ -5576,6 +5606,53 @@ function YinYang:CreateWindow(title_text, startTheme)
                 Text = "",
                 ZIndex = 13
             })
+
+            --// ── BADGE DE CRÉDITOS ─────────────────────────────────────────────────
+            --// Layout (desde el borde derecho, en px):
+            --//   Switch (66) + gap (8) + avatar (60) + gap (8) = 142 → texto termina a 164px del borde
+            --// El bloque avatar+nombre (60+4+16=80px) se centra verticalmente en el Holder.
+            if hasBadge then
+                --// Avatar circular con borde temático
+                if credit.imageId then
+                    local avatarRing = mk("Frame", {
+                        Parent = Holder,
+                        Size = UDim2.new(0, 60, 0, 60),
+                        Position = UDim2.new(1, -134, 0.5, -40),
+                        BackgroundColor3 = Theme.Secondary,
+                        ZIndex = 10
+                    })
+                    avatarRing:SetAttribute("ThemeRole", "Secondary")
+                    corner(avatarRing, 999)
+                    stroke(avatarRing, Theme.Stroke, 2.5, 0.30)
+
+                    local avatarImg = mk("ImageLabel", {
+                        Parent = avatarRing,
+                        Size = UDim2.new(1, -4, 1, -4),
+                        Position = UDim2.new(0, 2, 0, 2),
+                        BackgroundTransparency = 1,
+                        Image = credit.imageId,
+                        ZIndex = 11
+                    })
+                    corner(avatarImg, 999)
+                end
+
+                --// Nombre debajo del avatar (centrado bajo el círculo)
+                if credit.name then
+                    mk("TextLabel", {
+                        Parent = Holder,
+                        Size = UDim2.new(0, 68, 0, 14),
+                        Position = UDim2.new(1, -137, 0.5, 24),
+                        BackgroundTransparency = 1,
+                        Text = credit.name,
+                        TextColor3 = Theme.Text,
+                        Font = Enum.Font.GothamBold,
+                        TextSize = 10,
+                        TextXAlignment = Enum.TextXAlignment.Center,
+                        TextTruncate = Enum.TextTruncate.AtEnd,
+                        ZIndex = 10
+                    }):SetAttribute("ThemeTextRole", "Text")
+                end
+            end
 
             --// ── POSICIONES DE KNOB Y SHADOW ──────────────────────────────────────
             local knobOFF       = UDim2.new(0, 2,  0.5, -12)
