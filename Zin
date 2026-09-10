@@ -5610,14 +5610,25 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// ── BADGE DE CRÉDITOS ─────────────────────────────────────────────────
             --// Layout (desde el borde derecho, en px):
             --//   Switch (66) + gap (8) + avatar (60) + gap (8) = 142 → texto termina a 164px del borde
-            --// El bloque avatar+nombre (60+4+16=80px) se centra verticalmente en el Holder.
+            --// El bloque avatar+nombre se centra verticalmente en el Holder. El gap entre
+            --// avatar y nombre se calcula en base a holderH (en vez de un offset fijo sobre
+            --// Scale 0.5) para que nunca queden pegados/superpuestos en pantallas reales,
+            --// sea cual sea la altura del Holder (con o sin descripción).
             if hasBadge then
+                local credAvatarSize = 60
+                local credGap        = 10  -- separación mínima garantizada entre avatar y nombre
+                local credNameH      = 16
+                local credBlockH     = credAvatarSize + credGap + credNameH
+                local credTopPad     = math.max(0, (holderH - credBlockH) / 2)
+                local credAvatarTop  = credTopPad
+                local credNameTop    = credTopPad + credAvatarSize + credGap
+
                 --// Avatar circular con borde temático
                 if credit.imageId then
                     local avatarRing = mk("Frame", {
                         Parent = Holder,
-                        Size = UDim2.new(0, 60, 0, 60),
-                        Position = UDim2.new(1, -134, 0.5, -40),
+                        Size = UDim2.new(0, credAvatarSize, 0, credAvatarSize),
+                        Position = UDim2.new(1, -134, 0, credAvatarTop),
                         BackgroundColor3 = Theme.Secondary,
                         ZIndex = 10
                     })
@@ -5640,8 +5651,8 @@ function YinYang:CreateWindow(title_text, startTheme)
                 if credit.name then
                     mk("TextLabel", {
                         Parent = Holder,
-                        Size = UDim2.new(0, 68, 0, 14),
-                        Position = UDim2.new(1, -137, 0.5, 24),
+                        Size = UDim2.new(0, 68, 0, credNameH),
+                        Position = UDim2.new(1, -137, 0, credNameTop),
                         BackgroundTransparency = 1,
                         Text = credit.name,
                         TextColor3 = Theme.Text,
