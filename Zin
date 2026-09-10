@@ -4102,20 +4102,27 @@ function YinYang:CreateWindow(title_text, startTheme)
         for _, floatData in ipairs(Window.FloatingToggles or {}) do
             local win = floatData and floatData.Window
             if win and win.Parent and win:GetAttribute("SupportsFloatStyle") then
+                --// Ventanas con slider vinculado no soportan Círculo (no entra el track).
+                --// Se quedan en Pill con su alto extra, ignorando el cambio de estilo.
+                local winHasLinkedSlider = win:GetAttribute("HasLinkedSlider")
+                local thisFloatW = winHasLinkedSlider and 200 or floatW
+                local thisFloatH = winHasLinkedSlider and (36 + 40) or floatH
+                local thisIsCircle = isCircleStyle and not winHasLinkedSlider
+
                 --// Mantener el centro actual — no saltar de posición al re-estilar
                 local curCenterX = win.Position.X.Offset + win.Size.X.Offset / 2
                 local curCenterY = win.Position.Y.Offset + win.Size.Y.Offset / 2
 
-                win.Size = UDim2.fromOffset(floatW, floatH)
+                win.Size = UDim2.fromOffset(thisFloatW, thisFloatH)
                 win.Position = UDim2.new(
-                    win.Position.X.Scale, curCenterX - floatW / 2,
-                    win.Position.Y.Scale, curCenterY - floatH / 2
+                    win.Position.X.Scale, curCenterX - thisFloatW / 2,
+                    win.Position.Y.Scale, curCenterY - thisFloatH / 2
                 )
-                win.BackgroundTransparency = isCircleStyle and 0.55 or 0.30
+                win.BackgroundTransparency = thisIsCircle and 0.55 or 0.30
 
                 --// Degradado glassy: solo en píldora
                 local existingGradient = win:FindFirstChildOfClass("UIGradient")
-                if isCircleStyle then
+                if thisIsCircle then
                     if existingGradient then existingGradient:Destroy() end
                 elseif not existingGradient then
                     mk("UIGradient", {
@@ -4135,16 +4142,16 @@ function YinYang:CreateWindow(title_text, startTheme)
 
                 local existingStroke = win:FindFirstChildOfClass("UIStroke")
                 if existingStroke then
-                    existingStroke.Thickness = isCircleStyle and 3 or 2.5
+                    existingStroke.Thickness = thisIsCircle and 3 or 2.5
                 end
 
                 local label = win:FindFirstChildOfClass("TextLabel")
-                if label then
-                    label.Size = isCircleStyle and UDim2.new(1, -24, 1, -24) or UDim2.new(1, -24, 1, 0)
-                    label.Position = isCircleStyle and UDim2.new(0, 12, 0, 12) or UDim2.new(0, 12, 0, 0)
-                    label.TextSize = isCircleStyle and 11 or 21
-                    label.TextWrapped = isCircleStyle
-                    label.TextTruncate = isCircleStyle and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd
+                if label and not winHasLinkedSlider then
+                    label.Size = thisIsCircle and UDim2.new(1, -24, 1, -24) or UDim2.new(1, -24, 1, 0)
+                    label.Position = thisIsCircle and UDim2.new(0, 12, 0, 12) or UDim2.new(0, 12, 0, 0)
+                    label.TextSize = thisIsCircle and 11 or 21
+                    label.TextWrapped = thisIsCircle
+                    label.TextTruncate = thisIsCircle and Enum.TextTruncate.None or Enum.TextTruncate.AtEnd
                 end
                 if floatData.ClampPosition then
                     pcall(floatData.ClampPosition)
@@ -4661,8 +4668,12 @@ function YinYang:CreateWindow(title_text, startTheme)
                 --// Estilo elegido en Ajustes: "Pill" (actual) o "Circle" (nuevo, redondo)
                 local floatStyle    = SavedConfig.FloatingToggleStyle or "Pill"
                 local isCircleStyle = (floatStyle == "Circle")
+                --// Si esta opción tiene un slider vinculado (tog:LinkSlider), el flotante
+                --// muestra el slider debajo del switch — pero solo en Pill: en Círculo
+                --// (64x64) no entra un track usable, así que ahí se ignora el link.
+                local hasLinkedSlider = (_linkedSliderRef ~= nil) and not isCircleStyle
                 local floatW = isCircleStyle and 64 or 200
-                local floatH = isCircleStyle and 64 or 36
+                local floatH = isCircleStyle and 64 or (hasLinkedSlider and 76 or 36)
 
                 --// GLOW EXTERIOR - invisible, solo para sincronía de posición
                 FloatingGlow = mk("Frame", {
@@ -4690,6 +4701,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 })
                 FloatingWindow:SetAttribute("ThemeRole", "Secondary")
                 FloatingWindow:SetAttribute("SupportsFloatStyle", true)
+                FloatingWindow:SetAttribute("HasLinkedSlider", hasLinkedSlider)
                 corner(FloatingWindow, 999)  -- clampa a círculo perfecto cuando floatW==floatH
 
                 --// Degradado glassy: solo en el estilo píldora (el círculo usa fondo sólido oscuro)
@@ -4714,15 +4726,18 @@ function YinYang:CreateWindow(title_text, startTheme)
                 buildAnimatedBorder(FloatingWindow, Theme.Accent, UDim.new(1, 0), true)
 
                 --// TEXTO CENTRADO — más chico y con wrap en el círculo (2 líneas, como la referencia)
+                --// Con slider vinculado: ocupa solo la mitad superior, deja lugar al track debajo.
                 local FloatLabel = mk("TextLabel", {
                     Parent = FloatingWindow,
-                    Size = isCircleStyle and UDim2.new(1, -24, 1, -24) or UDim2.new(1, -24, 1, 0),
+                    Size = isCircleStyle and UDim2.new(1, -24, 1, -24)
+                        or hasLinkedSlider and UDim2.new(1, -24, 0, 34)
+                        or UDim2.new(1, -24, 1, 0),
                     Position = isCircleStyle and UDim2.new(0, 12, 0, 12) or UDim2.new(0, 12, 0, 0),
                     BackgroundTransparency = 1,
                     Text = displayText,
                     TextColor3 = Theme.Text,
                     Font = Enum.Font.GothamBlack,
-                    TextSize = isCircleStyle and 11 or 21,
+                    TextSize = isCircleStyle and 11 or (hasLinkedSlider and 17 or 21),
                     TextWrapped = isCircleStyle,
                     TextXAlignment = Enum.TextXAlignment.Center,
                     TextYAlignment = Enum.TextYAlignment.Center,
@@ -4732,6 +4747,125 @@ function YinYang:CreateWindow(title_text, startTheme)
                 FloatLabel:SetAttribute("ThemeTextRole", "Text")
                 FloatLabel:SetAttribute("TextSpanish", textSpanish)
                 FloatLabel:SetAttribute("TextEnglish", textEnglish)
+
+                --// ═════════════════════════════════════════════════════════════════════
+                --// FILA DEL SLIDER VINCULADO — mismo look que Tab:CreateSlider (track/
+                --// fill/thumb), pero compacto para caber dentro de la píldora flotante.
+                --// Ajusta _linkedSliderRef en vivo vía su método .Set(), que ya actualiza
+                --// el slider real de la pestaña y dispara su callback — sin duplicar lógica.
+                --// ═════════════════════════════════════════════════════════════════════
+                if hasLinkedSlider then
+                    local sMin   = _linkedSliderRef._min or 0
+                    local sMax   = _linkedSliderRef._max or 100
+                    local sValue = math.clamp(_linkedSliderRef._value or sMin, sMin, sMax)
+
+                    local SliderRow = mk("Frame", {
+                        Parent = FloatingWindow,
+                        Size = UDim2.new(1, -24, 0, 34),
+                        Position = UDim2.new(0, 12, 0, 36),
+                        BackgroundTransparency = 1,
+                        ZIndex = 7,
+                    })
+
+                    local SValueLabel = mk("TextLabel", {
+                        Parent = SliderRow,
+                        Size = UDim2.new(0, 44, 0, 16),
+                        Position = UDim2.new(1, -44, 0, 0),
+                        BackgroundTransparency = 1,
+                        Text = tostring(math.floor(sValue * 100) / 100),
+                        TextColor3 = Theme.Accent,
+                        Font = Enum.Font.GothamBold,
+                        TextSize = 12,
+                        TextXAlignment = Enum.TextXAlignment.Right,
+                        ZIndex = 8,
+                    })
+                    SValueLabel:SetAttribute("ThemeRole", "Accent")
+
+                    local STrack = mk("Frame", {
+                        Parent = SliderRow,
+                        Size = UDim2.new(1, -52, 0, 5),
+                        Position = UDim2.new(0, 0, 0, 20),
+                        BackgroundColor3 = Theme.AccentOff,
+                        BorderSizePixel = 0,
+                        Active = true,
+                        ZIndex = 7,
+                    })
+                    STrack:SetAttribute("ThemeRole", "AccentOff")
+                    corner(STrack, 2)
+
+                    local SFill = mk("Frame", {
+                        Parent = STrack,
+                        Size = UDim2.new(0, 0, 1, 0),
+                        BackgroundColor3 = Theme.Accent,
+                        BorderSizePixel = 0,
+                        ZIndex = 8,
+                    })
+                    SFill:SetAttribute("ThemeRole", "Accent")
+                    corner(SFill, 2)
+
+                    local SThumb = mk("Frame", {
+                        Parent = SliderRow,
+                        Size = UDim2.new(0, 14, 0, 20),
+                        Position = UDim2.new(0, 0, 0, 12),
+                        BackgroundColor3 = Theme.Accent,
+                        BorderSizePixel = 0,
+                        Active = true,
+                        ZIndex = 9,
+                    })
+                    SThumb:SetAttribute("ThemeRole", "Accent")
+                    corner(SThumb, 7)
+                    stroke(SThumb, Theme.Stroke, 1, 0.7)
+
+                    local function updateSliderVisual(percentage)
+                        percentage = math.clamp(percentage, 0, 1)
+                        local trackWidth = STrack.AbsoluteSize.X
+                        SFill.Size = UDim2.new(percentage, 0, 1, 0)
+                        SThumb.Position = UDim2.new(0, (trackWidth * percentage) - 7, 0, 12)
+                    end
+
+                    local initialPct = (sMax > sMin) and ((sValue - sMin) / (sMax - sMin)) or 0
+                    task.defer(function() updateSliderVisual(initialPct) end)
+
+                    local sDragging = false
+
+                    local function applyDragAt(inputPos)
+                        local relativeX = inputPos.X - STrack.AbsolutePosition.X
+                        local trackWidth = STrack.AbsoluteSize.X
+                        if trackWidth <= 0 then return end
+                        local percentage = math.clamp(relativeX / trackWidth, 0, 1)
+                        updateSliderVisual(percentage)
+                        local newVal = sMin + (sMax - sMin) * percentage
+                        SValueLabel.Text = tostring(math.floor(newVal * 100) / 100)
+                        if _linkedSliderRef.Set then
+                            _linkedSliderRef.Set(newVal)
+                        end
+                    end
+
+                    local function beginDrag(input)
+                        if input.UserInputType == Enum.UserInputType.MouseButton1
+                        or input.UserInputType == Enum.UserInputType.Touch then
+                            sDragging = true
+                            applyDragAt(input.Position)
+                        end
+                    end
+                    STrack.InputBegan:Connect(beginDrag)
+                    SThumb.InputBegan:Connect(beginDrag)
+
+                    track(UserInputService.InputChanged:Connect(function(input)
+                        if sDragging and (input.UserInputType == Enum.UserInputType.MouseMovement
+                        or input.UserInputType == Enum.UserInputType.Touch) then
+                            applyDragAt(input.Position)
+                        end
+                    end))
+
+                    track(UserInputService.InputEnded:Connect(function(input)
+                        if sDragging and (input.UserInputType == Enum.UserInputType.MouseButton1
+                        or input.UserInputType == Enum.UserInputType.Touch) then
+                            sDragging = false
+                            playSound(Sounds.Click, 0.5)
+                        end
+                    end))
+                end
 
                 --// Feedback visual de estado: usa colores del tema activo
                 local function updateFloatVisual()
