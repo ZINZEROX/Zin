@@ -6486,234 +6486,29 @@ function YinYang:CreateWindow(title_text, startTheme)
             }
         end
 
-        --// 🎚️ SLIDER PREMIUM v3.0 — CAROUSEL DE TARJETAS HORIZONTALES
-        --// Todos los sliders creados en una pestaña comparten un único carousel.
+        --// 🎚️ SLIDER PREMIUM v4.0 — CADA OPCIÓN TIENE SU PROPIO SLIDER
+        --// Cada llamada a CreateSlider crea una tarjeta independiente dentro de la pestaña.
         function Tab:CreateSlider(text, min, max, default, callback, isMirror)
             local value = default or min
             local isDragging = false
             local lastUpdateTime = 0
             local UPDATE_THROTTLE = 0.008
 
-            --// CAROUSEL PRINCIPAL (se crea una sola vez por pestaña)
-            local SliderCarousel = self._SliderCarousel
-            if not SliderCarousel then
-                local CarouselHolder = mk("Frame", {
-                    Parent = TabPage,
-                    Size = UDim2.new(1, 0, 0, 278),
-                    BackgroundTransparency = 1,
-                    BorderSizePixel = 0,
-                    ClipsDescendants = false,
-                    ZIndex = 9
-                })
-                CarouselHolder:SetAttribute("IsSliderHolder", true)
-
-                local Viewport = mk("Frame", {
-                    Parent = CarouselHolder,
-                    Size = UDim2.new(1, 0, 0, 236),
-                    Position = UDim2.new(0, 0, 0, 0),
-                    BackgroundTransparency = 1,
-                    BorderSizePixel = 0,
-                    ClipsDescendants = true,
-                    ZIndex = 9
-                })
-
-                local LeftArrow = mk("TextButton", {
-                    Parent = CarouselHolder,
-                    Size = UDim2.fromOffset(34, 34),
-                    Position = UDim2.new(0, 8, 0, 98),
-                    BackgroundColor3 = Theme.Secondary,
-                    BackgroundTransparency = 0.08,
-                    BorderSizePixel = 0,
-                    Text = "‹",
-                    TextColor3 = Theme.Text,
-                    Font = Enum.Font.GothamBold,
-                    TextSize = 28,
-                    AutoButtonColor = false,
-                    ZIndex = 30
-                })
-                LeftArrow:SetAttribute("ThemeRole", "Secondary")
-                corner(LeftArrow, 17)
-                stroke(LeftArrow, Theme.Stroke, 1, 0.35)
-
-                local RightArrow = mk("TextButton", {
-                    Parent = CarouselHolder,
-                    Size = UDim2.fromOffset(34, 34),
-                    Position = UDim2.new(1, -42, 0, 98),
-                    BackgroundColor3 = Theme.Secondary,
-                    BackgroundTransparency = 0.08,
-                    BorderSizePixel = 0,
-                    Text = "›",
-                    TextColor3 = Theme.Text,
-                    Font = Enum.Font.GothamBold,
-                    TextSize = 28,
-                    AutoButtonColor = false,
-                    ZIndex = 30
-                })
-                RightArrow:SetAttribute("ThemeRole", "Secondary")
-                corner(RightArrow, 17)
-                stroke(RightArrow, Theme.Stroke, 1, 0.35)
-
-                local Dots = mk("Frame", {
-                    Parent = CarouselHolder,
-                    Size = UDim2.new(1, -100, 0, 18),
-                    Position = UDim2.new(0, 50, 0, 246),
-                    BackgroundTransparency = 1,
-                    BorderSizePixel = 0,
-                    ZIndex = 30
-                })
-                mk("UIListLayout", {
-                    Parent = Dots,
-                    FillDirection = Enum.FillDirection.Horizontal,
-                    HorizontalAlignment = Enum.HorizontalAlignment.Center,
-                    VerticalAlignment = Enum.VerticalAlignment.Center,
-                    Padding = UDim.new(0, 6),
-                    SortOrder = Enum.SortOrder.LayoutOrder
-                }, Dots)
-
-                SliderCarousel = {
-                    Holder = CarouselHolder,
-                    Viewport = Viewport,
-                    LeftArrow = LeftArrow,
-                    RightArrow = RightArrow,
-                    Dots = Dots,
-                    Cards = {},
-                    ActiveIndex = 1,
-                    DragStartX = nil,
-                    SliderDragging = false,
-                }
-                self._SliderCarousel = SliderCarousel
-
-                local function getCardWidth()
-                    return math.max(180, Viewport.AbsoluteSize.X * 0.72)
-                end
-
-                local function positionCards(animate)
-                    local cardWidth = getCardWidth()
-                    local centerOffset = (Viewport.AbsoluteSize.X - cardWidth) / 2
-                    local gap = 18
-                    local step = cardWidth * 0.72 + gap
-
-                    for index, card in ipairs(SliderCarousel.Cards) do
-                        local distance = index - SliderCarousel.ActiveIndex
-                        local targetX = centerOffset + distance * step
-
-                        if animate then
-                            TweenService:Create(
-                                card,
-                                TweenInfo.new(0.28, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
-                                {Position = UDim2.new(0, targetX, 0, 12)}
-                            ):Play()
-                        else
-                            card.Position = UDim2.new(0, targetX, 0, 12)
-                        end
-
-                        local isActive = (distance == 0)
-                        local targetTransparency = isActive and 0.32 or 0.58
-                        local targetScale = isActive and 1 or 0.96
-
-                        TweenService:Create(
-                            card,
-                            TweenInfo.new(0.22, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                            {
-                                BackgroundTransparency = targetTransparency,
-                                Size = UDim2.new(0, cardWidth * targetScale, 0, isActive and 210 or 202)
-                            }
-                        ):Play()
-                    end
-                end
-
-                local function refreshDots()
-                    for _, child in ipairs(Dots:GetChildren()) do
-                        if child:IsA("GuiObject") and not child:IsA("UIListLayout") then
-                            child:Destroy()
-                        end
-                    end
-
-                    for index = 1, #SliderCarousel.Cards do
-                        local dot = mk("Frame", {
-                            Parent = Dots,
-                            Size = UDim2.fromOffset(index == SliderCarousel.ActiveIndex and 18 or 6, 6),
-                            BackgroundColor3 = index == SliderCarousel.ActiveIndex and Theme.Accent or Theme.AccentOff,
-                            BackgroundTransparency = index == SliderCarousel.ActiveIndex and 0 or 0.25,
-                            BorderSizePixel = 0,
-                            ZIndex = 31
-                        })
-                        dot:SetAttribute("ThemeRole", index == SliderCarousel.ActiveIndex and "Accent" or "AccentOff")
-                        corner(dot, 3)
-                    end
-                end
-
-                local function setActiveIndex(index, animate)
-                    local total = #SliderCarousel.Cards
-                    if total == 0 then return end
-
-                    SliderCarousel.ActiveIndex = math.clamp(index, 1, total)
-                    positionCards(animate ~= false)
-                    refreshDots()
-                    LeftArrow.Visible = SliderCarousel.ActiveIndex > 1
-                    RightArrow.Visible = SliderCarousel.ActiveIndex < total
-                end
-
-                SliderCarousel.SetActiveIndex = setActiveIndex
-                SliderCarousel.PositionCards = positionCards
-                SliderCarousel.RefreshDots = refreshDots
-
-                LeftArrow.MouseButton1Click:Connect(function()
-                    if SliderCarousel.ActiveIndex > 1 then
-                        playSound(Sounds.Click, 0.35)
-                        setActiveIndex(SliderCarousel.ActiveIndex - 1, true)
-                    end
-                end)
-
-                RightArrow.MouseButton1Click:Connect(function()
-                    if SliderCarousel.ActiveIndex < #SliderCarousel.Cards then
-                        playSound(Sounds.Click, 0.35)
-                        setActiveIndex(SliderCarousel.ActiveIndex + 1, true)
-                    end
-                end)
-
-                local function beginSwipe(input)
-                    if SliderCarousel.SliderDragging then return end
-                    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-                        SliderCarousel.DragStartX = input.Position.X
-                    end
-                end
-
-                local function finishSwipe(input)
-                    if SliderCarousel.SliderDragging or SliderCarousel.DragStartX == nil then
-                        SliderCarousel.DragStartX = nil
-                        return
-                    end
-
-                    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-                        local delta = input.Position.X - SliderCarousel.DragStartX
-                        SliderCarousel.DragStartX = nil
-
-                        if math.abs(delta) >= 45 then
-                            if delta < 0 and SliderCarousel.ActiveIndex < #SliderCarousel.Cards then
-                                playSound(Sounds.Click, 0.35)
-                                setActiveIndex(SliderCarousel.ActiveIndex + 1, true)
-                            elseif delta > 0 and SliderCarousel.ActiveIndex > 1 then
-                                playSound(Sounds.Click, 0.35)
-                                setActiveIndex(SliderCarousel.ActiveIndex - 1, true)
-                            end
-                        end
-                    end
-                end
-
-                Viewport.InputBegan:Connect(beginSwipe)
-                UserInputService.InputEnded:Connect(finishSwipe)
-                Viewport:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
-                    positionCards(false)
-                end)
-            end
+            --// CONTENEDOR INDEPENDIENTE DEL SLIDER
+            local SliderSection = mk("Frame", {
+                Parent = TabPage,
+                Size = UDim2.new(1, 0, 0, 224),
+                BackgroundTransparency = 1,
+                BorderSizePixel = 0,
+                ZIndex = 9
+            })
 
             local Holder = mk("Frame", {
-                Parent = SliderCarousel.Viewport,
-                Size = UDim2.new(0, 0, 0, 202),
-                Position = UDim2.new(0, 0, 0, 12),
+                Parent = SliderSection,
+                Size = UDim2.new(1, -12, 0, 210),
+                Position = UDim2.new(0, 6, 0, 0),
                 BackgroundColor3 = Theme.Secondary,
-                BackgroundTransparency = 0.58,
+                BackgroundTransparency = 0.42,
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
                 ZIndex = 12
@@ -6725,7 +6520,6 @@ function YinYang:CreateWindow(title_text, startTheme)
             buildAnimatedBorder(Holder, Theme.Accent, UDim.new(0, 16), true)
             Holder.Visible = not SlidersHidden
 
-            table.insert(SliderCarousel.Cards, Holder)
             --// LABEL PRINCIPAL
             local LabelTxt = mk("TextLabel", {
                 Parent = Holder,
@@ -6866,8 +6660,6 @@ function YinYang:CreateWindow(title_text, startTheme)
             local function OnSliderClick(input)
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     isDragging = true
-                    SliderCarousel.SliderDragging = true
-
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -6879,8 +6671,6 @@ function YinYang:CreateWindow(title_text, startTheme)
             local function OnSliderRelease(input)
                 if isDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
                     isDragging = false
-                    SliderCarousel.SliderDragging = false
-
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -6995,11 +6785,6 @@ function YinYang:CreateWindow(title_text, startTheme)
                     Kind = "Slider",
                 })
             end
-
-            SliderCarousel.RefreshDots()
-            SliderCarousel.PositionCards(false)
-            SliderCarousel.LeftArrow.Visible = SliderCarousel.ActiveIndex > 1
-            SliderCarousel.RightArrow.Visible = SliderCarousel.ActiveIndex < #SliderCarousel.Cards
 
             resetScrollTop(TabPage)
 
