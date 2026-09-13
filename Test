@@ -6494,21 +6494,35 @@ function YinYang:CreateWindow(title_text, startTheme)
             local lastUpdateTime = 0
             local UPDATE_THROTTLE = 0.008
 
-            --// CARRUSEL COMPARTIDO POR LA PESTAÑA: CADA SLIDER ES UNA TARJETA
-            --// independiente, pero todas se desplazan horizontalmente como en la referencia.
-            local Carousel = Tab._SliderCarousel
+            --// CARRUSEL POR GRUPO DE OPCIONES:
+            --// los sliders consecutivos pertenecen al mismo carrusel; cualquier
+            --// opción/elemento intermedio inicia su propio carrusel en su posición.
+            local Carousel = nil
+            local children = TabPage:GetChildren()
+            for i = #children, 1, -1 do
+                local child = children[i]
+                if child:IsA("GuiObject") then
+                    if child:GetAttribute("IsSliderCarouselSection") and Tab._LastSliderCarousel
+                    and Tab._LastSliderCarousel.Section == child then
+                        Carousel = Tab._LastSliderCarousel
+                    end
+                    break
+                end
+            end
+
             if not Carousel then
                 local SliderSection = mk("Frame", {
                     Parent = TabPage,
-                    Size = UDim2.new(1, 0, 0, 224),
+                    Size = UDim2.new(1, 0, 0, 190),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     ZIndex = 9
                 })
+                SliderSection:SetAttribute("IsSliderCarouselSection", true)
 
                 local Viewport = mk("Frame", {
                     Parent = SliderSection,
-                    Size = UDim2.new(1, -8, 0, 184),
+                    Size = UDim2.new(1, -8, 0, 150),
                     Position = UDim2.new(0, 4, 0, 0),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
@@ -6553,7 +6567,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 local DotHolder = mk("Frame", {
                     Parent = SliderSection,
                     Size = UDim2.new(1, -80, 0, 18),
-                    Position = UDim2.new(0, 40, 0, 192),
+                    Position = UDim2.new(0, 40, 0, 158),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     ZIndex = 30
@@ -6579,7 +6593,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                     Reflow = nil,
                     GoTo = nil,
                 }
-                Tab._SliderCarousel = Carousel
+                Tab._LastSliderCarousel = Carousel
 
                 local function refreshDots()
                     local count = #Carousel.Cards
@@ -6603,11 +6617,11 @@ function YinYang:CreateWindow(title_text, startTheme)
                     end
 
                     local viewportWidth = Carousel.Viewport.AbsoluteSize.X
-                    --// Tarjeta central más compacta, con las laterales entrando solo parcialmente.
-                    local cardWidth = math.clamp(viewportWidth * 0.52, 220, 380)
-                    local cardHeight = 172
-                    --// El paso siempre es mayor que el ancho de la tarjeta para evitar que se mezclen.
-                    local step = cardWidth + math.max(18, viewportWidth * 0.02)
+                    --// Proporción cercana a la referencia: tarjeta ancha, pero de poca altura.
+                    local cardWidth = math.clamp(viewportWidth * 0.56, 280, 390)
+                    local cardHeight = 128
+                    --// Separación real entre tarjetas: nunca se superponen entre sí.
+                    local step = cardWidth + math.max(16, viewportWidth * 0.025)
                     local centerX = viewportWidth * 0.5 - cardWidth * 0.5
 
                     for i, cardData in ipairs(Carousel.Cards) do
@@ -6616,20 +6630,20 @@ function YinYang:CreateWindow(title_text, startTheme)
                             local offset = (i - Carousel.ActiveIndex) * step
                             local distance = math.abs(i - Carousel.ActiveIndex)
                             local targetX = centerX + offset
-                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.88
+                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.90
                             local targetHeight = distance == 0 and cardHeight or cardHeight * 0.92
 
                             TweenService:Create(
                                 card,
                                 TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {
-                                    Position = UDim2.new(0, targetX, 0, 5),
+                                    Position = UDim2.new(0, targetX, 0, 4),
                                     Size = UDim2.new(0, targetWidth, 0, targetHeight),
                                     --// La tarjeta seleccionada domina visualmente; las laterales quedan atenuadas.
-                                    BackgroundTransparency = distance == 0 and 0.14 or 0.82
+                                    BackgroundTransparency = distance == 0 and 0.08 or 0.78
                                 }
                             ):Play()
-                            card.ZIndex = distance == 0 and 24 or 18 - math.min(distance, 8)
+                            card.ZIndex = distance == 0 and 30 or 10 - math.min(distance, 4)
                         end
                     end
                     refreshDots()
@@ -6678,10 +6692,10 @@ function YinYang:CreateWindow(title_text, startTheme)
 
             local Holder = mk("Frame", {
                 Parent = Carousel.Viewport,
-                Size = UDim2.new(0, 360, 0, 172),
-                Position = UDim2.new(0, 0, 0, 5),
+                Size = UDim2.new(0, 350, 0, 128),
+                Position = UDim2.new(0, 0, 0, 4),
                 BackgroundColor3 = Theme.Secondary,
-                BackgroundTransparency = 0.52,
+                BackgroundTransparency = 0.78,
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
                 ZIndex = 19
@@ -6732,13 +6746,13 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// LABEL PRINCIPAL
             local LabelTxt = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(1, -190, 0, 24),
-                Position = UDim2.new(0, 20, 0, 16),
+                Size = UDim2.new(1, -150, 0, 22),
+                Position = UDim2.new(0, 18, 0, 14),
                 BackgroundTransparency = 1,
                 Text = text,
                 TextColor3 = Theme.Text,
                 Font = Enum.Font.GothamBold,
-                TextSize = 15,
+                TextSize = 13,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextTruncate = Enum.TextTruncate.AtEnd,
                 ZIndex = 16
@@ -6748,8 +6762,8 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// VALUE LABEL
             local ValueLabel = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 70, 0, 24),
-                Position = UDim2.new(1, -145, 0, 16),
+                Size = UDim2.new(0, 62, 0, 22),
+                Position = UDim2.new(1, -126, 0, 14),
                 BackgroundTransparency = 1,
                 Text = tostring(math.floor(value * 100) / 100),
                 TextColor3 = Theme.Accent,
@@ -6763,8 +6777,8 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// RANGE LABELS
             local MinLabel = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 60, 0, 16),
-                Position = UDim2.new(0, 20, 1, -32),
+                Size = UDim2.new(0, 55, 0, 15),
+                Position = UDim2.new(0, 18, 1, -25),
                 BackgroundTransparency = 1,
                 Text = tostring(min),
                 TextColor3 = Theme.AccentOff,
@@ -6777,8 +6791,8 @@ function YinYang:CreateWindow(title_text, startTheme)
 
             local MaxLabel = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 60, 0, 16),
-                Position = UDim2.new(1, -80, 1, -32),
+                Size = UDim2.new(0, 55, 0, 15),
+                Position = UDim2.new(1, -73, 1, -25),
                 BackgroundTransparency = 1,
                 Text = tostring(max),
                 TextColor3 = Theme.AccentOff,
@@ -6792,8 +6806,8 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// SLIDER TRACK
             local SliderBackground = mk("Frame", {
                 Parent = Holder,
-                Size = UDim2.new(1, -40, 0, 6),
-                Position = UDim2.new(0, 20, 0, 112),
+                Size = UDim2.new(1, -36, 0, 6),
+                Position = UDim2.new(0, 18, 0, 76),
                 BackgroundColor3 = Theme.AccentOff,
                 BackgroundTransparency = 0.18,
                 BorderSizePixel = 0,
@@ -6816,8 +6830,8 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// THUMB
             local SliderThumb = mk("Frame", {
                 Parent = Holder,
-                Size = UDim2.new(0, 18, 0, 30),
-                Position = UDim2.new(0, 20, 0, 100),
+                Size = UDim2.new(0, 18, 0, 28),
+                Position = UDim2.new(0, 18, 0, 65),
                 BackgroundColor3 = Theme.Accent,
                 BorderSizePixel = 0,
                 ZIndex = 19
@@ -6846,11 +6860,11 @@ function YinYang:CreateWindow(title_text, startTheme)
                 local targetSize = UDim2.new(percentage, 0, 1, 0)
                 TweenService:Create(SliderFill, TweenInfo.new(0.05), {Size = targetSize}):Play()
 
-                local thumbTargetX = 20 + barWidth * percentage - 9
+                local thumbTargetX = 18 + barWidth * percentage - 9
                 TweenService:Create(
                     SliderThumb,
                     TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                    {Position = UDim2.new(0, thumbTargetX, 0, 100)}
+                    {Position = UDim2.new(0, thumbTargetX, 0, 65)}
                 ):Play()
 
                 TweenService:Create(
@@ -6872,7 +6886,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                        {Size = UDim2.new(0, 21, 0, 34)}
+                        {Size = UDim2.new(0, 21, 0, 32)}
                     ):Play()
                 end
             end
@@ -6883,7 +6897,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                        {Size = UDim2.new(0, 18, 0, 30)}
+                        {Size = UDim2.new(0, 18, 0, 28)}
                     ):Play()
 
                     playSound(Sounds.Click, 0.5)
@@ -6939,7 +6953,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 ResetBtn = mk("ImageButton", {
                     Parent = Holder,
                     Size = UDim2.new(0, 18, 0, 18),
-                    Position = UDim2.new(1, -68, 0, 16),
+                    Position = UDim2.new(1, -68, 0, 12),
                     BackgroundTransparency = 1,
                     Image = "rbxassetid://98954218682855",
                     ScaleType = Enum.ScaleType.Fit,
@@ -6952,7 +6966,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 local FavBtn = mk("ImageButton", {
                     Parent = Holder,
                     Size = UDim2.new(0, 22, 0, 22),
-                    Position = UDim2.new(1, -36, 0, 14),
+                    Position = UDim2.new(1, -36, 0, 10),
                     BackgroundTransparency = 1,
                     Image = isFavorite and "rbxassetid://113655648685815" or "rbxassetid://90877976276431",
                     ScaleType = Enum.ScaleType.Fit,
