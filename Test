@@ -6618,8 +6618,8 @@ function YinYang:CreateWindow(title_text, startTheme)
 
                     local viewportWidth = Carousel.Viewport.AbsoluteSize.X
                     --// Proporción cercana a la referencia: tarjeta ancha, pero de poca altura.
-                    local cardWidth = math.clamp(viewportWidth * 0.56, 260, 360)
-                    local cardHeight = 104
+                    local cardWidth = math.clamp(viewportWidth * 0.52, 240, 320)
+                    local cardHeight = 96
                     --// Separación tipo carrusel: las tarjetas laterales asoman, pero la activa
                     --// siempre queda por encima para que sus controles/texto no se mezclen.
                     local step = cardWidth * 0.78
@@ -6631,15 +6631,16 @@ function YinYang:CreateWindow(title_text, startTheme)
                             local offset = (i - Carousel.ActiveIndex) * step
                             local distance = math.abs(i - Carousel.ActiveIndex)
                             local targetX = centerX + offset
-                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.88
-                            local targetHeight = distance == 0 and cardHeight or cardHeight * 0.92
+                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.86
+                            local targetHeight = distance == 0 and cardHeight or cardHeight * 0.90
+                            local targetY = 4 + (cardHeight - targetHeight) * 0.5
                             local isActive = distance == 0
 
                             TweenService:Create(
                                 card,
                                 TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
                                 {
-                                    Position = UDim2.new(0, targetX, 0, 4),
+                                    Position = UDim2.new(0, targetX, 0, targetY),
                                     Size = UDim2.new(0, targetWidth, 0, targetHeight),
                                     --// La tarjeta seleccionada domina visualmente; las laterales quedan atenuadas.
                                     BackgroundTransparency = isActive and 0.12 or 0.72
@@ -6704,7 +6705,7 @@ function YinYang:CreateWindow(title_text, startTheme)
 
             local Holder = mk("Frame", {
                 Parent = Carousel.Viewport,
-                Size = UDim2.new(0, 320, 0, 104),
+                Size = UDim2.new(0, 300, 0, 96),
                 Position = UDim2.new(0, 0, 0, 10),
                 BackgroundColor3 = Theme.Secondary,
                 BackgroundTransparency = 0.72,
@@ -6758,13 +6759,13 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// LABEL PRINCIPAL
             local LabelTxt = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(1, -174, 0, 22),
+                Size = UDim2.new(1, -154, 0, 22),
                 Position = UDim2.new(0, 18, 0, 12),
                 BackgroundTransparency = 1,
                 Text = text,
                 TextColor3 = Theme.Text,
                 Font = Enum.Font.GothamBold,
-                TextSize = 15,
+                TextSize = 14,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextTruncate = Enum.TextTruncate.AtEnd,
                 ZIndex = 16
@@ -6774,8 +6775,8 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// VALUE LABEL
             local ValueLabel = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 62, 0, 22),
-                Position = UDim2.new(1, -108, 0, 12),
+                Size = UDim2.new(0, 58, 0, 22),
+                Position = UDim2.new(1, -146, 0, 12),
                 BackgroundTransparency = 1,
                 Text = tostring(math.floor(value * 100) / 100),
                 TextColor3 = Theme.Accent,
@@ -6943,7 +6944,12 @@ function YinYang:CreateWindow(title_text, startTheme)
             track(UserInputService.InputEnded:Connect(OnSliderRelease))
 
             --// INICIALIZAR CARD
-            UpdateSlider((value - min) / (max - min))
+            local initialPercentage = (value - min) / (max - min)
+            task.defer(function()
+                if Holder.Parent then
+                    UpdateSlider(initialPercentage)
+                end
+            end)
 
             local resetRotation = 0
             local ResetBtn = nil
@@ -6965,7 +6971,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 ResetBtn = mk("ImageButton", {
                     Parent = Holder,
                     Size = UDim2.new(0, 18, 0, 18),
-                    Position = UDim2.new(1, -68, 0, 12),
+                    Position = UDim2.new(1, -82, 0, 12),
                     BackgroundTransparency = 1,
                     Image = "rbxassetid://98954218682855",
                     ScaleType = Enum.ScaleType.Fit,
@@ -6978,7 +6984,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 local FavBtn = mk("ImageButton", {
                     Parent = Holder,
                     Size = UDim2.new(0, 22, 0, 22),
-                    Position = UDim2.new(1, -36, 0, 10),
+                    Position = UDim2.new(1, -52, 0, 10),
                     BackgroundTransparency = 1,
                     Image = isFavorite and "rbxassetid://113655648685815" or "rbxassetid://90877976276431",
                     ScaleType = Enum.ScaleType.Fit,
