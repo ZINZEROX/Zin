@@ -6603,9 +6603,11 @@ function YinYang:CreateWindow(title_text, startTheme)
                     end
 
                     local viewportWidth = Carousel.Viewport.AbsoluteSize.X
-                    local cardWidth = math.clamp(viewportWidth * 0.58, 300, 390)
+                    --// Tarjeta central más compacta, con las laterales entrando solo parcialmente.
+                    local cardWidth = math.clamp(viewportWidth * 0.52, 220, 380)
                     local cardHeight = 172
-                    local step = math.max(cardWidth * 0.76, 235)
+                    --// El paso siempre es mayor que el ancho de la tarjeta para evitar que se mezclen.
+                    local step = cardWidth + math.max(18, viewportWidth * 0.02)
                     local centerX = viewportWidth * 0.5 - cardWidth * 0.5
 
                     for i, cardData in ipairs(Carousel.Cards) do
@@ -6614,8 +6616,8 @@ function YinYang:CreateWindow(title_text, startTheme)
                             local offset = (i - Carousel.ActiveIndex) * step
                             local distance = math.abs(i - Carousel.ActiveIndex)
                             local targetX = centerX + offset
-                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.94
-                            local targetHeight = distance == 0 and cardHeight or cardHeight * 0.94
+                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.88
+                            local targetHeight = distance == 0 and cardHeight or cardHeight * 0.92
 
                             TweenService:Create(
                                 card,
@@ -6623,10 +6625,11 @@ function YinYang:CreateWindow(title_text, startTheme)
                                 {
                                     Position = UDim2.new(0, targetX, 0, 5),
                                     Size = UDim2.new(0, targetWidth, 0, targetHeight),
-                                    BackgroundTransparency = distance == 0 and 0.30 or 0.52
+                                    --// La tarjeta seleccionada domina visualmente; las laterales quedan atenuadas.
+                                    BackgroundTransparency = distance == 0 and 0.14 or 0.82
                                 }
                             ):Play()
-                            card.ZIndex = 20 - math.min(distance, 10)
+                            card.ZIndex = distance == 0 and 24 or 18 - math.min(distance, 8)
                         end
                     end
                     refreshDots()
