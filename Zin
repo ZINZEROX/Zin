@@ -6486,249 +6486,498 @@ function YinYang:CreateWindow(title_text, startTheme)
             }
         end
 
-        --// 🎚️ SLIDER PREMIUM v2.0 (OTRO NIVEL - Zero Lag + GV2 Glow + Rango Visible)
+        --// 🎚️ SLIDER PREMIUM v4.0 — CADA OPCIÓN TIENE SU PROPIO SLIDER
+        --// Cada llamada a CreateSlider crea una tarjeta independiente dentro de la pestaña.
         function Tab:CreateSlider(text, min, max, default, callback, isMirror)
             local value = default or min
             local isDragging = false
             local lastUpdateTime = 0
-            local UPDATE_THROTTLE = 0.008  -- 120fps smoothness
-            
-            --// CONTAINER PRINCIPAL
+            local UPDATE_THROTTLE = 0.008
+
+            --// CARRUSEL POR GRUPO DE OPCIONES:
+            --// los sliders consecutivos pertenecen al mismo carrusel; cualquier
+            --// opción/elemento intermedio inicia su propio carrusel en su posición.
+            local Carousel = nil
+            local children = TabPage:GetChildren()
+            for i = #children, 1, -1 do
+                local child = children[i]
+                if child:IsA("GuiObject") then
+                    if child:GetAttribute("IsSliderCarouselSection") and Tab._LastSliderCarousel
+                    and Tab._LastSliderCarousel.Section == child then
+                        Carousel = Tab._LastSliderCarousel
+                    end
+                    break
+                end
+            end
+
+            if not Carousel then
+                local SliderSection = mk("Frame", {
+                    Parent = TabPage,
+                    Size = UDim2.new(1, 0, 0, 134),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = 9
+                })
+                SliderSection:SetAttribute("IsSliderCarouselSection", true)
+
+                local Viewport = mk("Frame", {
+                    Parent = SliderSection,
+                    Size = UDim2.new(1, -8, 0, 110),
+                    Position = UDim2.new(0, 4, 0, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ClipsDescendants = true,
+                    ZIndex = 10
+                })
+
+                local PrevBtn = mk("TextButton", {
+                    Parent = Viewport,
+                    Size = UDim2.new(0, 38, 0, 38),
+                    Position = UDim2.new(0, 4, 0.5, -19),
+                    BackgroundColor3 = Theme.Background,
+                    BackgroundTransparency = 0.18,
+                    BorderSizePixel = 0,
+                    Text = "‹",
+                    TextColor3 = Theme.Text,
+                    Font = Enum.Font.GothamBold,
+                    TextSize = 30,
+                    AutoButtonColor = false,
+                    ZIndex = 60
+                })
+                corner(PrevBtn, 19)
+                stroke(PrevBtn, Theme.Stroke, 1, 0.5)
+
+                local NextBtn = mk("TextButton", {
+                    Parent = Viewport,
+                    Size = UDim2.new(0, 38, 0, 38),
+                    Position = UDim2.new(1, -42, 0.5, -19),
+                    BackgroundColor3 = Theme.Background,
+                    BackgroundTransparency = 0.18,
+                    BorderSizePixel = 0,
+                    Text = "›",
+                    TextColor3 = Theme.Text,
+                    Font = Enum.Font.GothamBold,
+                    TextSize = 30,
+                    AutoButtonColor = false,
+                    ZIndex = 60
+                })
+                corner(NextBtn, 19)
+                stroke(NextBtn, Theme.Stroke, 1, 0.5)
+
+                local DotHolder = mk("Frame", {
+                    Parent = SliderSection,
+                    Size = UDim2.new(1, -80, 0, 16),
+                    Position = UDim2.new(0, 40, 0, 114),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = 60
+                })
+                mk("UIListLayout", {
+                    Parent = DotHolder,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Center,
+                    VerticalAlignment = Enum.VerticalAlignment.Center,
+                    Padding = UDim.new(0, 6),
+                    SortOrder = Enum.SortOrder.LayoutOrder
+                })
+
+                Carousel = {
+                    Section = SliderSection,
+                    Viewport = Viewport,
+                    PrevBtn = PrevBtn,
+                    NextBtn = NextBtn,
+                    DotHolder = DotHolder,
+                    Cards = {},
+                    Dots = {},
+                    ActiveIndex = 1,
+                    Reflow = nil,
+                    GoTo = nil,
+                }
+                Tab._LastSliderCarousel = Carousel
+
+                local function refreshDots()
+                    local count = #Carousel.Cards
+                    for i, dot in ipairs(Carousel.Dots) do
+                        dot.BackgroundColor3 = (i == Carousel.ActiveIndex) and Theme.Text or Theme.AccentOff
+                        dot.BackgroundTransparency = (i == Carousel.ActiveIndex) and 0 or 0.35
+                        dot.Size = (i == Carousel.ActiveIndex)
+                            and UDim2.new(0, 20, 0, 7)
+                            or UDim2.new(0, 7, 0, 7)
+                    end
+                    Carousel.PrevBtn.Visible = count > 1
+                    Carousel.NextBtn.Visible = count > 1
+                    Carousel.DotHolder.Visible = count > 1
+                end
+
+                local function reflow()
+                    local count = #Carousel.Cards
+                    if count == 0 then
+                        refreshDots()
+                        return
+                    end
+
+                    local viewportWidth = Carousel.Viewport.AbsoluteSize.X
+                    --// Proporción cercana a la referencia: tarjeta ancha, pero de poca altura.
+                    local cardWidth = math.clamp(viewportWidth * 0.52, 240, 320)
+                    local cardHeight = 96
+                    --// Separación tipo carrusel: las tarjetas laterales asoman, pero la activa
+                    --// siempre queda por encima para que sus controles/texto no se mezclen.
+                    local step = cardWidth * 0.78
+                    local centerX = viewportWidth * 0.5 - cardWidth * 0.5
+
+                    for i, cardData in ipairs(Carousel.Cards) do
+                        local card = cardData.Holder
+                        if card and card.Parent then
+                            local offset = (i - Carousel.ActiveIndex) * step
+                            local distance = math.abs(i - Carousel.ActiveIndex)
+                            local targetX = centerX + offset
+                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.86
+                            local targetHeight = distance == 0 and cardHeight or cardHeight * 0.90
+                            local targetY = 4 + (cardHeight - targetHeight) * 0.5
+                            local isActive = distance == 0
+
+                            TweenService:Create(
+                                card,
+                                TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                                {
+                                    Position = UDim2.new(0, targetX, 0, targetY),
+                                    Size = UDim2.new(0, targetWidth, 0, targetHeight),
+                                    --// La tarjeta seleccionada domina visualmente; las laterales quedan atenuadas.
+                                    BackgroundTransparency = isActive and 0.12 or 0.72
+                                }
+                            ):Play()
+                            card.ZIndex = isActive and 50 or 20 - math.min(distance, 4)
+                            for _, descendant in ipairs(card:GetDescendants()) do
+                                if descendant:IsA("GuiObject") then
+                                    descendant.ZIndex = isActive and 51 or 21 - math.min(distance, 4)
+                                end
+                                if descendant:IsA("TextLabel") or descendant:IsA("TextButton") then
+                                    descendant.TextTransparency = isActive and 0 or 0.35
+                                elseif descendant:IsA("ImageLabel") or descendant:IsA("ImageButton") then
+                                    descendant.ImageTransparency = isActive and 0 or 0.35
+                                end
+                            end
+                        end
+                    end
+                    refreshDots()
+                end
+                Carousel.Reflow = reflow
+
+                local function goTo(index)
+                    local count = #Carousel.Cards
+                    if count == 0 then return end
+                    Carousel.ActiveIndex = math.clamp(index, 1, count)
+                    reflow()
+                end
+                Carousel.GoTo = goTo
+
+                PrevBtn.MouseButton1Click:Connect(function()
+                    goTo(Carousel.ActiveIndex - 1)
+                end)
+                NextBtn.MouseButton1Click:Connect(function()
+                    goTo(Carousel.ActiveIndex + 1)
+                end)
+
+                local swipeStartX = nil
+                Viewport.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
+                        swipeStartX = input.Position.X
+                    end
+                end)
+                Viewport.InputEnded:Connect(function(input)
+                    if swipeStartX and (input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch) then
+                        local deltaX = input.Position.X - swipeStartX
+                        swipeStartX = nil
+                        if math.abs(deltaX) >= 45 then
+                            if deltaX < 0 then
+                                goTo(Carousel.ActiveIndex + 1)
+                            else
+                                goTo(Carousel.ActiveIndex - 1)
+                            end
+                        end
+                    end
+                end)
+
+                Carousel._resizeConnection = Viewport:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow)
+            end
+
             local Holder = mk("Frame", {
-                Parent = TabPage,
-                Size = UDim2.new(1, 0, 0, 72),
+                Parent = Carousel.Viewport,
+                Size = UDim2.new(0, 300, 0, 96),
+                Position = UDim2.new(0, 0, 0, 10),
                 BackgroundColor3 = Theme.Secondary,
-                BackgroundTransparency = 0.5,
-                ZIndex = 9
+                BackgroundTransparency = 0.72,
+                BorderSizePixel = 0,
+                ClipsDescendants = true,
+                Active = true,
+                ZIndex = 53
             })
             Holder:SetAttribute("ThemeRole", "Secondary")
             Holder:SetAttribute("IsSliderHolder", true)
-            corner(Holder, 12)
-            stroke(Holder, Theme.Stroke, 1.5, 0.6)
-            buildAnimatedBorder(Holder, Theme.Accent, UDim.new(0, 12), true)
+            corner(Holder, 14)
+            stroke(Holder, Theme.Stroke, 1.5, 0.45)
+            buildAnimatedBorder(Holder, Theme.Accent, UDim.new(0, 14), true)
             Holder.Visible = not SlidersHidden
+
+            table.insert(Carousel.Cards, {Holder = Holder})
+
+            local dot = mk("Frame", {
+                Parent = Carousel.DotHolder,
+                Size = UDim2.new(0, 7, 0, 7),
+                BackgroundColor3 = Theme.AccentOff,
+                BackgroundTransparency = 0.35,
+                BorderSizePixel = 0,
+                LayoutOrder = #Carousel.Dots + 1,
+                ZIndex = 31
+            })
+            corner(dot, 4)
+            table.insert(Carousel.Dots, dot)
+
+            Holder.Destroying:Connect(function()
+                for i, cardData in ipairs(Carousel.Cards) do
+                    if cardData.Holder == Holder then
+                        table.remove(Carousel.Cards, i)
+                        break
+                    end
+                end
+                if Carousel.ActiveIndex > #Carousel.Cards then
+                    Carousel.ActiveIndex = math.max(1, #Carousel.Cards)
+                end
+                for i, existingDot in ipairs(Carousel.Dots) do
+                    if existingDot == dot then
+                        table.remove(Carousel.Dots, i)
+                        pcall(function() existingDot:Destroy() end)
+                        break
+                    end
+                end
+                if Carousel.Reflow then Carousel.Reflow() end
+            end)
+
+            Carousel.Reflow()
 
             --// LABEL PRINCIPAL
             local LabelTxt = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 200, 0, 22),
-                Position = UDim2.new(0, 16, 0, 10),
+                Size = UDim2.new(1, -154, 0, 22),
+                Position = UDim2.new(0, 18, 0, 12),
                 BackgroundTransparency = 1,
                 Text = text,
                 TextColor3 = Theme.Text,
                 Font = Enum.Font.GothamBold,
                 TextSize = 14,
                 TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 10
+                TextTruncate = Enum.TextTruncate.AtEnd,
+                ZIndex = 16
             })
             LabelTxt:SetAttribute("ThemeRole", "Text")
 
-            --// VALUE LABEL (Dinámico a la derecha)
+            --// VALUE LABEL
             local ValueLabel = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 70, 0, 22),
-                Position = UDim2.new(1, -120, 0, 10),
+                Size = UDim2.new(0, 58, 0, 22),
+                Position = UDim2.new(1, -146, 0, 12),
                 BackgroundTransparency = 1,
                 Text = tostring(math.floor(value * 100) / 100),
                 TextColor3 = Theme.Accent,
                 Font = Enum.Font.GothamBold,
-                TextSize = 13,
+                TextSize = 15,
                 TextXAlignment = Enum.TextXAlignment.Right,
-                ZIndex = 11
+                ZIndex = 51
             })
             ValueLabel:SetAttribute("ThemeRole", "Accent")
 
-            --// RANGO MÍNIMO (Abajo a la izquierda)
+            --// RANGE LABELS
             local MinLabel = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 50, 0, 16),
-                Position = UDim2.new(0, 16, 0, 52),
+                Size = UDim2.new(0, 55, 0, 15),
+                Position = UDim2.new(0, 18, 1, -22),
                 BackgroundTransparency = 1,
                 Text = tostring(min),
                 TextColor3 = Theme.AccentOff,
                 Font = Enum.Font.Gotham,
                 TextSize = 10,
                 TextXAlignment = Enum.TextXAlignment.Left,
-                ZIndex = 10
+                ZIndex = 16
             })
             MinLabel:SetAttribute("ThemeRole", "AccentOff")
 
-            --// RANGO MÁXIMO (Abajo a la derecha)
             local MaxLabel = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 50, 0, 16),
-                Position = UDim2.new(1, -66, 0, 52),
+                Size = UDim2.new(0, 55, 0, 15),
+                Position = UDim2.new(1, -73, 1, -22),
                 BackgroundTransparency = 1,
                 Text = tostring(max),
                 TextColor3 = Theme.AccentOff,
                 Font = Enum.Font.Gotham,
                 TextSize = 10,
                 TextXAlignment = Enum.TextXAlignment.Right,
-                ZIndex = 10
+                ZIndex = 16
             })
             MaxLabel:SetAttribute("ThemeRole", "AccentOff")
 
-            --// SLIDER BACKGROUND (Barra de fondo)
+            --// SLIDER TRACK
             local SliderBackground = mk("Frame", {
                 Parent = Holder,
-                Size = UDim2.new(1, -32, 0, 5),
-                Position = UDim2.new(0, 16, 0, 44),
+                Size = UDim2.new(1, -36, 0, 6),
+                Position = UDim2.new(0, 18, 0, 62),
                 BackgroundColor3 = Theme.AccentOff,
+                BackgroundTransparency = 0.18,
                 BorderSizePixel = 0,
-                ZIndex = 10
+                Active = true,
+                ZIndex = 51
             })
             SliderBackground:SetAttribute("ThemeRole", "AccentOff")
-            corner(SliderBackground, 2)
+            corner(SliderBackground, 3)
 
-            --// SLIDER FILL (La barra que se llena)
             local SliderFill = mk("Frame", {
                 Parent = SliderBackground,
                 Size = UDim2.new(0, 0, 1, 0),
                 Position = UDim2.new(0, 0, 0, 0),
                 BackgroundColor3 = Theme.Accent,
                 BorderSizePixel = 0,
-                ZIndex = 11
+                ZIndex = 52
             })
             SliderFill:SetAttribute("ThemeRole", "Accent")
-            corner(SliderFill, 2)
+            corner(SliderFill, 3)
 
-            --// SLIDER THUMB PRINCIPAL (El círculo/rectángulo que arrastramos)
+            --// THUMB
             local SliderThumb = mk("Frame", {
                 Parent = Holder,
-                Size = UDim2.new(0, 14, 0, 22),
-                Position = UDim2.new(0, 16, 0, 37),
+                Size = UDim2.new(0, 18, 0, 26),
+                Position = UDim2.new(0, 18, 0, 57),
                 BackgroundColor3 = Theme.Accent,
                 BorderSizePixel = 0,
-                ZIndex = 13
+                Active = true,
+                ZIndex = 53
             })
             SliderThumb:SetAttribute("ThemeRole", "Accent")
-            corner(SliderThumb, 8)
+            corner(SliderThumb, 9)
+            stroke(SliderThumb, Theme.Stroke, 1, 0.55)
 
-            --// GLOW EFFECT (sin asset externo)
             local ThumbGlow = mk("Frame", {
                 Parent = SliderThumb,
-                Size = UDim2.new(1, 6, 1, 6),
-                Position = UDim2.new(0, -3, 0, -3),
+                Size = UDim2.new(1, 8, 1, 8),
+                Position = UDim2.new(0, -4, 0, -4),
                 BackgroundColor3 = Theme.Accent,
-                BackgroundTransparency = 0.7,
+                BackgroundTransparency = 0.76,
                 BorderSizePixel = 0,
-                ZIndex = 12
+                ZIndex = 52
             })
             ThumbGlow:SetAttribute("ThemeRole", "Accent")
-            corner(ThumbGlow, 10)
+            corner(ThumbGlow, 12)
 
-            --// BORDE ELEGANTE DEL THUMB
-            stroke(SliderThumb, Theme.Stroke, 1, 0.7)
-
-            --// FUNCIÓN: Actualizar slider (OPTIMIZADA)
             local function UpdateSlider(percentage)
                 percentage = math.clamp(percentage, 0, 1)
                 value = min + (max - min) * percentage
-                
-                --// Animar el fill suavemente
+
                 local barWidth = SliderBackground.AbsoluteSize.X
                 local targetSize = UDim2.new(percentage, 0, 1, 0)
                 TweenService:Create(SliderFill, TweenInfo.new(0.05), {Size = targetSize}):Play()
-                
-                --// Posición del thumb (SUAVE con Tween)
-                local thumbTargetX = 16 + (barWidth) * percentage - 7
-                local tweenThumb = TweenService:Create(
-                    SliderThumb, 
-                    TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                    {Position = UDim2.new(0, thumbTargetX, 0, 37)}
-                )
-                tweenThumb:Play()
 
-                --// GLOW PULSE cuando se mueve
-                local tweenGlow = TweenService:Create(
+                local thumbTargetX = 18 + barWidth * percentage - 9
+                TweenService:Create(
+                    SliderThumb,
+                    TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                    {Position = UDim2.new(0, thumbTargetX, 0, 57)}
+                ):Play()
+
+                TweenService:Create(
                     ThumbGlow,
                     TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
                     {BackgroundTransparency = 0.4}
-                )
-                tweenGlow:Play()
-                
-                --// Actualizar valor en label (sin delays)
+                ):Play()
+
                 ValueLabel.Text = tostring(math.floor(value * 100) / 100)
-                
-                --// Callback sin lag
+
                 task.spawn(function()
                     pcall(callback, value)
                 end)
             end
 
-            --// FUNCIÓN: Manejar clicks del slider
+            local function isThisCardActive()
+                for i, cardData in ipairs(Carousel.Cards) do
+                    if cardData.Holder == Holder then
+                        return i == Carousel.ActiveIndex
+                    end
+                end
+                return false
+            end
+
             local function OnSliderClick(input)
+                if not isThisCardActive() then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     isDragging = true
-                    
-                    --// EFECTO: El thumb se agranda ligeramente cuando lo agarras
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                        {Size = UDim2.new(0, 16, 0, 26)}
+                        {Size = UDim2.new(0, 21, 0, 30)}
                     ):Play()
                 end
             end
 
-            --// FUNCIÓN: Manejar soltar el slider
             local function OnSliderRelease(input)
                 if isDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
                     isDragging = false
-                    
-                    --// EFECTO: El thumb vuelve a su tamaño normal
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                        {Size = UDim2.new(0, 14, 0, 22)}
+                        {Size = UDim2.new(0, 18, 0, 26)}
                     ):Play()
-                    
-                    --// SONIDO al soltar
+
                     playSound(Sounds.Click, 0.5)
-                    
-                    --// GLOW vuelve a transparency normal
+
                     TweenService:Create(
                         ThumbGlow,
                         TweenInfo.new(0.3, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-                        {BackgroundTransparency = 0.7}
+                        {BackgroundTransparency = 0.76}
                     ):Play()
                 end
             end
 
-            --// CONECTAR EVENTOS DE CLICK
             SliderBackground.InputBegan:Connect(OnSliderClick)
             SliderThumb.InputBegan:Connect(OnSliderClick)
 
-            --// INPUT MOVEMENT (OPTIMIZADO - Sin tartamudeos) 🚀
             track(UserInputService.InputChanged:Connect(function(input)
                 if isDragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
                     local currentTime = tick()
-                    
-                    --// THROTTLE: Solo actualizar cada 8ms (120fps max)
                     if currentTime - lastUpdateTime >= UPDATE_THROTTLE then
                         lastUpdateTime = currentTime
-                        
+
                         local relativeX = input.Position.X - SliderBackground.AbsolutePosition.X
                         local barWidth = SliderBackground.AbsoluteSize.X
                         local percentage = math.clamp(relativeX / barWidth, 0, 1)
-                        
+
                         UpdateSlider(percentage)
                     end
                 end
             end))
 
-            --// SOLTAR SLIDER - GLOBAL para celular (evita que se quede pegado)
-            track(UserInputService.InputEnded:Connect(function(input)
-                if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-                    OnSliderRelease(input)
-                end
+            track(UserInputService.InputEnded:Connect(OnSliderRelease))
+
+            --// FIX: el thumb se calcula con un ancho en píxeles (barWidth) tomado en
+            --// el momento del cálculo. El fill se autoajusta solo porque su Size es
+            --// por Scale, pero el thumb no, así que si el tamaño real de la tarjeta
+            --// cambia después (p.ej. al abrir la librería, cuando el carrusel recién
+            --// obtiene su ancho final), el thumb queda desalineado del final del fill.
+            --// Esto lo resincroniza al instante (sin tween) cada vez que cambia el
+            --// tamaño real del track.
+            track(SliderBackground:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                local currentPercentage = math.clamp((value - min) / (max - min), 0, 1)
+                local barWidth = SliderBackground.AbsoluteSize.X
+                local thumbTargetX = 18 + barWidth * currentPercentage - 9
+                SliderThumb.Position = UDim2.new(0, thumbTargetX, 0, 57)
             end))
 
-            --// ACTUALIZAR INICIAL
-            UpdateSlider((value - min) / (max - min))
-            resetScrollTop(TabPage)
+            --// INICIALIZAR CARD
+            local initialPercentage = (value - min) / (max - min)
+            task.defer(function()
+                if Holder.Parent then
+                    UpdateSlider(initialPercentage)
+                end
+            end)
 
-            --// Botón Reset — vuelve el slider al valor por defecto (determinado al crearlo) y gira
-            --// el ícono cada vez que se presiona. Expuesto también como método :Reset() para uso externo.
             local resetRotation = 0
             local ResetBtn = nil
             local function doReset()
@@ -6745,18 +6994,15 @@ function YinYang:CreateWindow(title_text, startTheme)
                 end
             end
 
-            --// Botón Favorito — estrella, agrega/saca este slider de la pestaña Favoritos (persiste)
-            --// ⚠️ Solo en filas normales: una fila espejo (isMirror) NO debe tener su propia
-            --// estrella, o favoritear el espejo generaría otro espejo dentro de Favo (recursión infinita).
             if not isMirror then
                 ResetBtn = mk("ImageButton", {
                     Parent = Holder,
                     Size = UDim2.new(0, 18, 0, 18),
-                    Position = UDim2.new(1, -49, 0, 10),
+                    Position = UDim2.new(1, -82, 0, 12),
                     BackgroundTransparency = 1,
                     Image = "rbxassetid://98954218682855",
                     ScaleType = Enum.ScaleType.Fit,
-                    ZIndex = 15
+                    ZIndex = 20
                 })
                 ResetBtn.MouseButton1Click:Connect(doReset)
 
@@ -6765,11 +7011,11 @@ function YinYang:CreateWindow(title_text, startTheme)
                 local FavBtn = mk("ImageButton", {
                     Parent = Holder,
                     Size = UDim2.new(0, 22, 0, 22),
-                    Position = UDim2.new(1, -30, 0, 8),
+                    Position = UDim2.new(1, -52, 0, 10),
                     BackgroundTransparency = 1,
                     Image = isFavorite and "rbxassetid://113655648685815" or "rbxassetid://90877976276431",
                     ScaleType = Enum.ScaleType.Fit,
-                    ZIndex = 15
+                    ZIndex = 20
                 })
 
                 local favRow = nil
@@ -6798,6 +7044,10 @@ function YinYang:CreateWindow(title_text, startTheme)
                 end)
             end
 
+            --// Reflow final: aplica visibilidad, ZIndex y transparencia a todos los controles
+            --// después de construir completamente la tarjeta.
+            Carousel.Reflow()
+
             if not isMirror then
                 Window._RegisterGlobalOption(self, {
                     Id = nameSpanish .. "::" .. text,
@@ -6808,7 +7058,8 @@ function YinYang:CreateWindow(title_text, startTheme)
                 })
             end
 
-            --// RETORNAR TABLA CON MÉTODOS
+            resetScrollTop(TabPage)
+
             return {
                 Holder = Holder,
                 Set = function(newValue)
@@ -6829,13 +7080,12 @@ function YinYang:CreateWindow(title_text, startTheme)
                     max = newMax
                     MaxLabel.Text = tostring(max)
                 end,
-                --// Referencias para LinkSlider
-                _labelES   = text,
-                _labelEN   = text,
-                _min       = min,
-                _max       = max,
-                _value     = value,
-                _callback  = callback,
+                _labelES = text,
+                _labelEN = text,
+                _min = min,
+                _max = max,
+                _value = value,
+                _callback = callback,
             }
         end
 
@@ -13229,7 +13479,7 @@ end
 
     -- Railway expone este dominio por HTTPS público; el proceso interno escucha en el puerto 8080.
     -- No se agrega :8080 porque ese puerto no está expuesto públicamente en el dominio Railway.
-    local BACKEND_URL = "chatglobal.up.railway.app"
+    local BACKEND_URL = "https://chatglobal.up.railway.app"
     local ChatSyncPollRate = 2  -- segundos entre cada consulta al backend
     local knownServerIds = {}   -- IDs de mensajes de servidor ya renderizados
     local backendConnected = false
@@ -17431,53 +17681,79 @@ end
         if FloatingPlayer and FloatingPlayer.Parent then return end
         FloatingPlayer = mk("Frame", {
             Parent = Window.ScreenGui,
-            Size = UDim2.fromOffset(304, 146), Position = UDim2.new(0.5, -152, 0.72, 0),
+            Size = UDim2.fromOffset(236, 112), Position = UDim2.new(0.5, -118, 0.72, 0),
             BackgroundColor3 = Theme.Secondary, BackgroundTransparency = 0.06,
             BorderSizePixel = 0, ClipsDescendants = true, Visible = SpotifyState.FloatingPlayerVisible,
             Active = true, ZIndex = 520,
         })
         FloatingPlayer:SetAttribute("ThemeRole", "Secondary")
-        corner(FloatingPlayer, 18)
+        corner(FloatingPlayer, 16)
         local FloatingStroke = stroke(FloatingPlayer, Theme.Accent, 1.15, 0.42)
         FloatingStroke:SetAttribute("ThemeRole", "Accent")
         local Drag = mk("TextButton", {
-            Parent = FloatingPlayer, Size = UDim2.new(1, -46, 0, 25), Position = UDim2.new(0, 12, 0, 0),
+            Parent = FloatingPlayer, Size = UDim2.new(1, -34, 0, 14), Position = UDim2.new(0, 10, 0, 2),
             BackgroundTransparency = 1, Text = "MÚSICA  ·  ARRASTRA", TextColor3 = spotifyDim,
-            Font = Enum.Font.GothamBold, TextSize = 8, TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false, ZIndex = 522,
+            Font = Enum.Font.GothamBold, TextSize = 7, TextXAlignment = Enum.TextXAlignment.Left, AutoButtonColor = false, ZIndex = 522,
         })
         local Close = mk("TextButton", {
-            Parent = FloatingPlayer, Size = UDim2.fromOffset(22, 22), Position = UDim2.new(1, -31, 0, 3),
+            Parent = FloatingPlayer, Size = UDim2.fromOffset(18, 18), Position = UDim2.new(1, -24, 0, 3),
             BackgroundColor3 = Theme.Background, BackgroundTransparency = 0.10,
-            Text = "×", TextColor3 = spotifyText, Font = Enum.Font.GothamBlack, TextSize = 15, AutoButtonColor = false, ZIndex = 523,
+            Text = "×", TextColor3 = spotifyText, Font = Enum.Font.GothamBlack, TextSize = 13, AutoButtonColor = false, ZIndex = 523,
         })
         Close:SetAttribute("ThemeRole", "Background"); Close:SetAttribute("ThemeTextRole", "Text")
-        corner(Close, 7)
+        corner(Close, 6)
         FloatCover = mk("ImageLabel", {
-            Parent = FloatingPlayer, Size = UDim2.fromOffset(46, 46), Position = UDim2.new(0, 12, 0, 30),
+            Parent = FloatingPlayer, Size = UDim2.fromOffset(44, 44), Position = UDim2.new(0, 10, 0, 16),
             BackgroundColor3 = Theme.Background, BackgroundTransparency = 0.06, BorderSizePixel = 0,
             Image = "", ScaleType = Enum.ScaleType.Crop, ZIndex = 522,
         })
         FloatCover:SetAttribute("ThemeRole", "Background")
-        corner(FloatCover, 11)
+        corner(FloatCover, 10)
         local FloatCoverStroke = stroke(FloatCover, Theme.Accent, 1, 0.46)
         FloatCoverStroke:SetAttribute("ThemeRole", "Accent")
         FloatFallback = mk("TextLabel", {
             Parent = FloatCover, Size = UDim2.new(1, 0, 1, 0), BackgroundTransparency = 1,
-            Text = "♪", TextColor3 = Theme.Accent, Font = Enum.Font.GothamBlack, TextSize = 21, ZIndex = 523,
+            Text = "♪", TextColor3 = Theme.Accent, Font = Enum.Font.GothamBlack, TextSize = 18, ZIndex = 523,
         })
         FloatFallback:SetAttribute("ThemeTextRole", "Accent")
         FloatTitle = mk("TextLabel", {
-            Parent = FloatingPlayer, Size = UDim2.new(1, -82, 0, 18), Position = UDim2.new(0, 68, 0, 34),
+            Parent = FloatingPlayer, Size = UDim2.new(1, -74, 0, 16), Position = UDim2.new(0, 62, 0, 18),
             BackgroundTransparency = 1, Text = "Selecciona una canción", TextColor3 = spotifyText, Font = Enum.Font.GothamBold,
             TextSize = 12, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 522,
         })
         FloatArtist = mk("TextLabel", {
-            Parent = FloatingPlayer, Size = UDim2.new(1, -82, 0, 16), Position = UDim2.new(0, 68, 0, 53),
+            Parent = FloatingPlayer, Size = UDim2.new(1, -74, 0, 13), Position = UDim2.new(0, 62, 0, 36),
             BackgroundTransparency = 1, Text = "Spotify", TextColor3 = spotifyDim, Font = Enum.Font.Gotham,
             TextSize = 9, TextXAlignment = Enum.TextXAlignment.Left, TextTruncate = Enum.TextTruncate.AtEnd, ZIndex = 522,
         })
+        --// FILA DE CONTROLES CENTRADA (como la referencia): favorito + prev + play + next
+        local function control(text, x, width, textSize)
+            local button = mk("TextButton", {
+                Parent = FloatingPlayer, Size = UDim2.fromOffset(width, 28), Position = UDim2.new(0, x, 0, 64),
+                BackgroundColor3 = Theme.Background, BackgroundTransparency = 0.06,
+                Text = text, TextColor3 = spotifyText, Font = Enum.Font.GothamBlack, TextSize = textSize or 12, AutoButtonColor = false, ZIndex = 522,
+            })
+            button:SetAttribute("ThemeRole", "Background"); button:SetAttribute("ThemeTextRole", "Text")
+            corner(button, 8); return button
+        end
+        FloatLike = control("☆", 10, 22, 12)
+        local Previous = control("‹‹", 40, 30, 13)
+        FloatPlay = control("▶", 76, 36, 13)
+        local Next = control("››", 118, 30, 13)
+        FloatStatus = mk("TextLabel", {
+            Parent = FloatingPlayer, Size = UDim2.fromOffset(58, 16), Position = UDim2.new(1, -66, 0, 70),
+            BackgroundTransparency = 1, Text = "", TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold,
+            TextSize = 8, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 522,
+        })
+        FloatStatus:SetAttribute("ThemeTextRole", "Accent")
+        --// TIEMPO + BARRA DE PROGRESO, pegados abajo del todo
+        FloatTime = mk("TextLabel", {
+            Parent = FloatingPlayer, Size = UDim2.new(1, -24, 0, 12), Position = UDim2.new(0, 12, 0, 92),
+            BackgroundTransparency = 1, Text = "0:00 / 0:00", TextColor3 = spotifyDim, Font = Enum.Font.GothamMedium,
+            TextSize = 8, TextXAlignment = Enum.TextXAlignment.Left, ZIndex = 522,
+        })
         local ProgressTrack = mk("Frame", {
-            Parent = FloatingPlayer, Size = UDim2.new(1, -24, 0, 4), Position = UDim2.new(0, 12, 0, 82),
+            Parent = FloatingPlayer, Size = UDim2.new(1, -24, 0, 4), Position = UDim2.new(0, 12, 0, 106),
             BackgroundColor3 = Theme.Background, BorderSizePixel = 0, ZIndex = 522,
         })
         ProgressTrack:SetAttribute("ThemeRole", "Background")
@@ -17487,30 +17763,6 @@ end
         })
         FloatProgress:SetAttribute("ThemeRole", "Accent")
         corner(FloatProgress, 99)
-        FloatTime = mk("TextLabel", {
-            Parent = FloatingPlayer, Size = UDim2.new(1, -24, 0, 12), Position = UDim2.new(0, 12, 0, 88),
-            BackgroundTransparency = 1, Text = "0:00 / 0:00", TextColor3 = spotifyDim, Font = Enum.Font.GothamMedium,
-            TextSize = 8, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 522,
-        })
-        local function control(text, x, width)
-            local button = mk("TextButton", {
-                Parent = FloatingPlayer, Size = UDim2.fromOffset(width, 26), Position = UDim2.new(0, x, 1, -33),
-                BackgroundColor3 = Theme.Background, BackgroundTransparency = 0.06,
-                Text = text, TextColor3 = spotifyText, Font = Enum.Font.GothamBlack, TextSize = 13, AutoButtonColor = false, ZIndex = 522,
-            })
-            button:SetAttribute("ThemeRole", "Background"); button:SetAttribute("ThemeTextRole", "Text")
-            corner(button, 8); return button
-        end
-        FloatLike = control("☆", 12, 30)
-        local Previous = control("‹‹", 49, 38)
-        FloatPlay = control("▶", 94, 38)
-        local Next = control("››", 139, 38)
-        FloatStatus = mk("TextLabel", {
-            Parent = FloatingPlayer, Size = UDim2.fromOffset(102, 26), Position = UDim2.new(1, -114, 1, -33),
-            BackgroundTransparency = 1, Text = "", TextColor3 = Theme.Accent, Font = Enum.Font.GothamBold,
-            TextSize = 8, TextXAlignment = Enum.TextXAlignment.Right, ZIndex = 522,
-        })
-        FloatStatus:SetAttribute("ThemeTextRole", "Accent")
         Close.Activated:Connect(function() setFloatingVisible(false) end)
         FloatLike.Activated:Connect(function() if SpotifyState.Catalog[SpotifyState.SelectedIndex] then toggleTrackLike(SpotifyState.SelectedIndex) end end)
         Previous.Activated:Connect(previousTrack); FloatPlay.Activated:Connect(togglePlayback); Next.Activated:Connect(nextTrack)
