@@ -6494,24 +6494,194 @@ function YinYang:CreateWindow(title_text, startTheme)
             local lastUpdateTime = 0
             local UPDATE_THROTTLE = 0.008
 
-            --// CONTENEDOR INDEPENDIENTE DEL SLIDER
-            local SliderSection = mk("Frame", {
-                Parent = TabPage,
-                Size = UDim2.new(1, 0, 0, 224),
-                BackgroundTransparency = 1,
-                BorderSizePixel = 0,
-                ZIndex = 9
-            })
+            --// CARRUSEL COMPARTIDO POR LA PESTAÑA: CADA SLIDER ES UNA TARJETA
+            --// independiente, pero todas se desplazan horizontalmente como en la referencia.
+            local Carousel = Tab._SliderCarousel
+            if not Carousel then
+                local SliderSection = mk("Frame", {
+                    Parent = TabPage,
+                    Size = UDim2.new(1, 0, 0, 224),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = 9
+                })
+
+                local Viewport = mk("Frame", {
+                    Parent = SliderSection,
+                    Size = UDim2.new(1, -8, 0, 184),
+                    Position = UDim2.new(0, 4, 0, 0),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ClipsDescendants = true,
+                    ZIndex = 10
+                })
+
+                local PrevBtn = mk("TextButton", {
+                    Parent = Viewport,
+                    Size = UDim2.new(0, 34, 0, 34),
+                    Position = UDim2.new(0, 8, 0.5, -17),
+                    BackgroundColor3 = Theme.Background,
+                    BackgroundTransparency = 0.18,
+                    BorderSizePixel = 0,
+                    Text = "‹",
+                    TextColor3 = Theme.Text,
+                    Font = Enum.Font.GothamBold,
+                    TextSize = 28,
+                    AutoButtonColor = false,
+                    ZIndex = 30
+                })
+                corner(PrevBtn, 17)
+                stroke(PrevBtn, Theme.Stroke, 1, 0.5)
+
+                local NextBtn = mk("TextButton", {
+                    Parent = Viewport,
+                    Size = UDim2.new(0, 34, 0, 34),
+                    Position = UDim2.new(1, -42, 0.5, -17),
+                    BackgroundColor3 = Theme.Background,
+                    BackgroundTransparency = 0.18,
+                    BorderSizePixel = 0,
+                    Text = "›",
+                    TextColor3 = Theme.Text,
+                    Font = Enum.Font.GothamBold,
+                    TextSize = 28,
+                    AutoButtonColor = false,
+                    ZIndex = 30
+                })
+                corner(NextBtn, 17)
+                stroke(NextBtn, Theme.Stroke, 1, 0.5)
+
+                local DotHolder = mk("Frame", {
+                    Parent = SliderSection,
+                    Size = UDim2.new(1, -80, 0, 18),
+                    Position = UDim2.new(0, 40, 0, 192),
+                    BackgroundTransparency = 1,
+                    BorderSizePixel = 0,
+                    ZIndex = 30
+                })
+                mk("UIListLayout", {
+                    Parent = DotHolder,
+                    FillDirection = Enum.FillDirection.Horizontal,
+                    HorizontalAlignment = Enum.HorizontalAlignment.Center,
+                    VerticalAlignment = Enum.VerticalAlignment.Center,
+                    Padding = UDim.new(0, 6),
+                    SortOrder = Enum.SortOrder.LayoutOrder
+                })
+
+                Carousel = {
+                    Section = SliderSection,
+                    Viewport = Viewport,
+                    PrevBtn = PrevBtn,
+                    NextBtn = NextBtn,
+                    DotHolder = DotHolder,
+                    Cards = {},
+                    Dots = {},
+                    ActiveIndex = 1,
+                    Reflow = nil,
+                    GoTo = nil,
+                }
+                Tab._SliderCarousel = Carousel
+
+                local function refreshDots()
+                    local count = #Carousel.Cards
+                    for i, dot in ipairs(Carousel.Dots) do
+                        dot.BackgroundColor3 = (i == Carousel.ActiveIndex) and Theme.Text or Theme.AccentOff
+                        dot.BackgroundTransparency = (i == Carousel.ActiveIndex) and 0 or 0.35
+                        dot.Size = (i == Carousel.ActiveIndex)
+                            and UDim2.new(0, 20, 0, 7)
+                            or UDim2.new(0, 7, 0, 7)
+                    end
+                    Carousel.PrevBtn.Visible = count > 1
+                    Carousel.NextBtn.Visible = count > 1
+                    Carousel.DotHolder.Visible = count > 1
+                end
+
+                local function reflow()
+                    local count = #Carousel.Cards
+                    if count == 0 then
+                        refreshDots()
+                        return
+                    end
+
+                    local viewportWidth = Carousel.Viewport.AbsoluteSize.X
+                    local cardWidth = math.clamp(viewportWidth * 0.58, 300, 390)
+                    local cardHeight = 172
+                    local step = math.max(cardWidth * 0.76, 235)
+                    local centerX = viewportWidth * 0.5 - cardWidth * 0.5
+
+                    for i, cardData in ipairs(Carousel.Cards) do
+                        local card = cardData.Holder
+                        if card and card.Parent then
+                            local offset = (i - Carousel.ActiveIndex) * step
+                            local distance = math.abs(i - Carousel.ActiveIndex)
+                            local targetX = centerX + offset
+                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.94
+                            local targetHeight = distance == 0 and cardHeight or cardHeight * 0.94
+
+                            TweenService:Create(
+                                card,
+                                TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                                {
+                                    Position = UDim2.new(0, targetX, 0, 5),
+                                    Size = UDim2.new(0, targetWidth, 0, targetHeight),
+                                    BackgroundTransparency = distance == 0 and 0.30 or 0.52
+                                }
+                            ):Play()
+                            card.ZIndex = 20 - math.min(distance, 10)
+                        end
+                    end
+                    refreshDots()
+                end
+                Carousel.Reflow = reflow
+
+                local function goTo(index)
+                    local count = #Carousel.Cards
+                    if count == 0 then return end
+                    Carousel.ActiveIndex = math.clamp(index, 1, count)
+                    reflow()
+                end
+                Carousel.GoTo = goTo
+
+                PrevBtn.MouseButton1Click:Connect(function()
+                    goTo(Carousel.ActiveIndex - 1)
+                end)
+                NextBtn.MouseButton1Click:Connect(function()
+                    goTo(Carousel.ActiveIndex + 1)
+                end)
+
+                local swipeStartX = nil
+                Viewport.InputBegan:Connect(function(input)
+                    if input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch then
+                        swipeStartX = input.Position.X
+                    end
+                end)
+                Viewport.InputEnded:Connect(function(input)
+                    if swipeStartX and (input.UserInputType == Enum.UserInputType.MouseButton1
+                    or input.UserInputType == Enum.UserInputType.Touch) then
+                        local deltaX = input.Position.X - swipeStartX
+                        swipeStartX = nil
+                        if math.abs(deltaX) >= 45 then
+                            if deltaX < 0 then
+                                goTo(Carousel.ActiveIndex + 1)
+                            else
+                                goTo(Carousel.ActiveIndex - 1)
+                            end
+                        end
+                    end
+                end)
+
+                Carousel._resizeConnection = Viewport:GetPropertyChangedSignal("AbsoluteSize"):Connect(reflow)
+            end
 
             local Holder = mk("Frame", {
-                Parent = SliderSection,
-                Size = UDim2.new(1, -12, 0, 210),
-                Position = UDim2.new(0, 6, 0, 0),
+                Parent = Carousel.Viewport,
+                Size = UDim2.new(0, 360, 0, 172),
+                Position = UDim2.new(0, 0, 0, 5),
                 BackgroundColor3 = Theme.Secondary,
-                BackgroundTransparency = 0.42,
+                BackgroundTransparency = 0.52,
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
-                ZIndex = 12
+                ZIndex = 19
             })
             Holder:SetAttribute("ThemeRole", "Secondary")
             Holder:SetAttribute("IsSliderHolder", true)
@@ -6520,10 +6690,46 @@ function YinYang:CreateWindow(title_text, startTheme)
             buildAnimatedBorder(Holder, Theme.Accent, UDim.new(0, 16), true)
             Holder.Visible = not SlidersHidden
 
+            table.insert(Carousel.Cards, {Holder = Holder})
+
+            local dot = mk("Frame", {
+                Parent = Carousel.DotHolder,
+                Size = UDim2.new(0, 7, 0, 7),
+                BackgroundColor3 = Theme.AccentOff,
+                BackgroundTransparency = 0.35,
+                BorderSizePixel = 0,
+                LayoutOrder = #Carousel.Dots + 1,
+                ZIndex = 31
+            })
+            corner(dot, 4)
+            table.insert(Carousel.Dots, dot)
+
+            Holder.Destroying:Connect(function()
+                for i, cardData in ipairs(Carousel.Cards) do
+                    if cardData.Holder == Holder then
+                        table.remove(Carousel.Cards, i)
+                        break
+                    end
+                end
+                if Carousel.ActiveIndex > #Carousel.Cards then
+                    Carousel.ActiveIndex = math.max(1, #Carousel.Cards)
+                end
+                for i, existingDot in ipairs(Carousel.Dots) do
+                    if existingDot == dot then
+                        table.remove(Carousel.Dots, i)
+                        pcall(function() existingDot:Destroy() end)
+                        break
+                    end
+                end
+                if Carousel.Reflow then Carousel.Reflow() end
+            end)
+
+            Carousel.Reflow()
+
             --// LABEL PRINCIPAL
             local LabelTxt = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(1, -150, 0, 24),
+                Size = UDim2.new(1, -190, 0, 24),
                 Position = UDim2.new(0, 20, 0, 16),
                 BackgroundTransparency = 1,
                 Text = text,
@@ -6539,8 +6745,8 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// VALUE LABEL
             local ValueLabel = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(0, 90, 0, 24),
-                Position = UDim2.new(1, -112, 0, 16),
+                Size = UDim2.new(0, 70, 0, 24),
+                Position = UDim2.new(1, -145, 0, 16),
                 BackgroundTransparency = 1,
                 Text = tostring(math.floor(value * 100) / 100),
                 TextColor3 = Theme.Accent,
