@@ -16983,7 +16983,11 @@ end
         end
 
         if rowData.Cover then
-            rowData.Cover.Image = track.Cover
+            ensureCoverCached(track, function(resolved)
+                if rowData.Cover and rowData.Cover.Parent then
+                    rowData.Cover.Image = resolved
+                end
+            end)
         end
 
         if rowData.Title then
@@ -17047,8 +17051,14 @@ end
             return
         end
 
-        AlbumArt.Image = track.Cover
-        AlbumFallback.Visible = (track.Cover == nil or trim(track.Cover) == "")
+        AlbumArt.Image = ""
+        AlbumFallback.Visible = true
+        ensureCoverCached(track, function(resolved)
+            if AlbumArt and AlbumArt.Parent then
+                AlbumArt.Image = resolved
+                AlbumFallback.Visible = trim(resolved) == ""
+            end
+        end)
 
         PlayerSongTitle.Text = track.Name
         PlayerSongArtist.Text = track.Artist
@@ -17169,6 +17179,70 @@ end
 
         return true, customAsset
     end
+    --// ── CACHÉ DE IMÁGENES DE PORTADA ──────────────────────────────────────────
+    --// Soporte para dos formatos en el campo Cover del catálogo:
+    --//   • rbxassetid://XXXX  → método antiguo (Roblox asset), sincrónico
+    --//   • https://raw.githubusercontent.com/...  → método nuevo (GitHub URL)
+    --//     La imagen se descarga vía HttpGet, se guarda con writefile y se
+    --//     convierte a asset local con getcustomasset (igual que el audio).
+    --// Mientras descarga, la ImageLabel queda vacía y AlbumFallback permanece visible.
+    local coverImageCache = {}  -- url → asset ya resuelto (evita re-descargas)
+
+    local function ensureCoverCached(track, onResolved)
+        local rawCover = trim(track.Cover or "")
+
+        --// rbxassetid:// o cadena vacía: usar directo, sincrónico
+        if rawCover == "" or not rawCover:match("^https?://") then
+            if onResolved then onResolved(rawCover) end
+            return rawCover
+        end
+
+        --// Cache hit en memoria
+        if coverImageCache[rawCover] then
+            if onResolved then onResolved(coverImageCache[rawCover]) end
+            return coverImageCache[rawCover]
+        end
+
+        --// URL externa: descarga asíncrona (mismo patrón que ensureTrackCached)
+        if onResolved then
+            task.spawn(function()
+                local resolved = ""  -- fallback vacío si todo falla
+
+                --// Nombre de archivo local: último segmento de la URL, prefijado "yycover_"
+                local fileName = "yycover_" .. (rawCover:match("[^/]+$") or "cover.bin")
+
+                local alreadyOnDisk = false
+                if isfile then
+                    local ok, res = pcall(isfile, fileName)
+                    alreadyOnDisk = ok and res == true
+                end
+
+                if not alreadyOnDisk and writefile then
+                    local ok, data = pcall(function()
+                        return game:HttpGet(rawCover, true)
+                    end)
+                    if ok and type(data) == "string" and #data > 16 then
+                        pcall(writefile, fileName, data)
+                        alreadyOnDisk = true
+                    end
+                end
+
+                if alreadyOnDisk and getcustomasset then
+                    local ok, asset = pcall(getcustomasset, fileName)
+                    if ok and type(asset) == "string" and #asset > 0 then
+                        resolved = asset
+                    end
+                end
+                --// Sin getcustomasset la imagen queda vacía (AlbumFallback permanece).
+
+                coverImageCache[rawCover] = resolved
+                onResolved(resolved)
+            end)
+        end
+
+        return ""  -- sincrónico placeholder mientras descarga
+    end
+
 
     local function playTrack(index)
         local track = SpotifyState.Catalog[index]
@@ -17543,7 +17617,13 @@ end
         FloatingPlayer.Visible = SpotifyState.FloatingPlayerVisible == true
         local currentTrack = SpotifyState.CurrentTrack or SpotifyState.Catalog[SpotifyState.SelectedIndex]
         if not currentTrack then return end
-        FloatCover.Image = currentTrack.Cover or ""; FloatFallback.Visible = trim(currentTrack.Cover or "") == ""
+        FloatCover.Image = ""; FloatFallback.Visible = true
+        ensureCoverCached(currentTrack, function(resolved)
+            if FloatCover and FloatCover.Parent then
+                FloatCover.Image = resolved
+                FloatFallback.Visible = trim(resolved) == ""
+            end
+        end)
         FloatTitle.Text = currentTrack.Name or "Selecciona una canción"; FloatArtist.Text = currentTrack.Artist or "Spotify"
         local current = SpotifyState.CurrentSound and math.max(0, tonumber(SpotifyState.CurrentSound.TimePosition) or 0) or 0
         local total = SpotifyState.CurrentSound and tonumber(SpotifyState.CurrentSound.TimeLength) or durationToSeconds(currentTrack.Duration)
@@ -17737,11 +17817,14 @@ end
             BackgroundColor3 = Color3.fromRGB(18, 18, 18),
             BackgroundTransparency = 0.04,
             BorderSizePixel = 0,
-            Image = track.Cover,
+            Image = "",
             ScaleType = Enum.ScaleType.Crop,
             ZIndex = 12,
         })
         corner(Cover, 10)
+        ensureCoverCached(track, function(resolved)
+            if Cover and Cover.Parent then Cover.Image = resolved end
+        end)
 
         local CoverStroke = stroke(Cover, Color3.fromRGB(126, 126, 136), 1, 0.52)
         pcall(function()
@@ -19420,7 +19503,11 @@ if DEMO_ACTIVO then
         end
 
         if rowData.Cover then
-            rowData.Cover.Image = track.Cover
+            ensureCoverCached(track, function(resolved)
+                if rowData.Cover and rowData.Cover.Parent then
+                    rowData.Cover.Image = resolved
+                end
+            end)
         end
 
         if rowData.Title then
@@ -19484,8 +19571,14 @@ if DEMO_ACTIVO then
             return
         end
 
-        AlbumArt.Image = track.Cover
-        AlbumFallback.Visible = (track.Cover == nil or trim(track.Cover) == "")
+        AlbumArt.Image = ""
+        AlbumFallback.Visible = true
+        ensureCoverCached(track, function(resolved)
+            if AlbumArt and AlbumArt.Parent then
+                AlbumArt.Image = resolved
+                AlbumFallback.Visible = trim(resolved) == ""
+            end
+        end)
 
         PlayerSongTitle.Text = track.Name
         PlayerSongArtist.Text = track.Artist
@@ -19606,6 +19699,70 @@ if DEMO_ACTIVO then
 
         return true, customAsset
     end
+    --// ── CACHÉ DE IMÁGENES DE PORTADA ──────────────────────────────────────────
+    --// Soporte para dos formatos en el campo Cover del catálogo:
+    --//   • rbxassetid://XXXX  → método antiguo (Roblox asset), sincrónico
+    --//   • https://raw.githubusercontent.com/...  → método nuevo (GitHub URL)
+    --//     La imagen se descarga vía HttpGet, se guarda con writefile y se
+    --//     convierte a asset local con getcustomasset (igual que el audio).
+    --// Mientras descarga, la ImageLabel queda vacía y AlbumFallback permanece visible.
+    local coverImageCache = {}  -- url → asset ya resuelto (evita re-descargas)
+
+    local function ensureCoverCached(track, onResolved)
+        local rawCover = trim(track.Cover or "")
+
+        --// rbxassetid:// o cadena vacía: usar directo, sincrónico
+        if rawCover == "" or not rawCover:match("^https?://") then
+            if onResolved then onResolved(rawCover) end
+            return rawCover
+        end
+
+        --// Cache hit en memoria
+        if coverImageCache[rawCover] then
+            if onResolved then onResolved(coverImageCache[rawCover]) end
+            return coverImageCache[rawCover]
+        end
+
+        --// URL externa: descarga asíncrona (mismo patrón que ensureTrackCached)
+        if onResolved then
+            task.spawn(function()
+                local resolved = ""  -- fallback vacío si todo falla
+
+                --// Nombre de archivo local: último segmento de la URL, prefijado "yycover_"
+                local fileName = "yycover_" .. (rawCover:match("[^/]+$") or "cover.bin")
+
+                local alreadyOnDisk = false
+                if isfile then
+                    local ok, res = pcall(isfile, fileName)
+                    alreadyOnDisk = ok and res == true
+                end
+
+                if not alreadyOnDisk and writefile then
+                    local ok, data = pcall(function()
+                        return game:HttpGet(rawCover, true)
+                    end)
+                    if ok and type(data) == "string" and #data > 16 then
+                        pcall(writefile, fileName, data)
+                        alreadyOnDisk = true
+                    end
+                end
+
+                if alreadyOnDisk and getcustomasset then
+                    local ok, asset = pcall(getcustomasset, fileName)
+                    if ok and type(asset) == "string" and #asset > 0 then
+                        resolved = asset
+                    end
+                end
+                --// Sin getcustomasset la imagen queda vacía (AlbumFallback permanece).
+
+                coverImageCache[rawCover] = resolved
+                onResolved(resolved)
+            end)
+        end
+
+        return ""  -- sincrónico placeholder mientras descarga
+    end
+
 
     local function playTrack(index)
         local track = SpotifyState.Catalog[index]
@@ -20091,8 +20248,13 @@ if DEMO_ACTIVO then
         SpotifyFloatingPlayer.Visible = SpotifyState.FloatingPlayerVisible == true
         local currentTrack = SpotifyState.CurrentTrack or SpotifyState.Catalog[SpotifyState.SelectedIndex]
         if not currentTrack then return end
-        FloatingCover.Image = currentTrack.Cover or ""
-        FloatingFallback.Visible = trim(currentTrack.Cover or "") == ""
+        FloatingCover.Image = ""; FloatingFallback.Visible = true
+        ensureCoverCached(currentTrack, function(resolved)
+            if FloatingCover and FloatingCover.Parent then
+                FloatingCover.Image = resolved
+                FloatingFallback.Visible = trim(resolved) == ""
+            end
+        end)
         FloatingTitle.Text = currentTrack.Name or "Selecciona una canción"
         FloatingArtist.Text = currentTrack.Artist or "Spotify"
         local current = SpotifyState.CurrentSound and math.max(0, tonumber(SpotifyState.CurrentSound.TimePosition) or 0) or 0
@@ -20289,11 +20451,14 @@ if DEMO_ACTIVO then
             BackgroundColor3 = Color3.fromRGB(18, 18, 18),
             BackgroundTransparency = 0.04,
             BorderSizePixel = 0,
-            Image = track.Cover,
+            Image = "",
             ScaleType = Enum.ScaleType.Crop,
             ZIndex = 12,
         })
         corner(Cover, 10)
+        ensureCoverCached(track, function(resolved)
+            if Cover and Cover.Parent then Cover.Image = resolved end
+        end)
 
         local CoverStroke = stroke(Cover, Color3.fromRGB(126, 126, 136), 1, 0.52)
         pcall(function()
