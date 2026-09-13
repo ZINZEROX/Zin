@@ -6513,7 +6513,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             if not Carousel then
                 local SliderSection = mk("Frame", {
                     Parent = TabPage,
-                    Size = UDim2.new(1, 0, 0, 190),
+                    Size = UDim2.new(1, 0, 0, 166),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     ZIndex = 9
@@ -6522,7 +6522,7 @@ function YinYang:CreateWindow(title_text, startTheme)
 
                 local Viewport = mk("Frame", {
                     Parent = SliderSection,
-                    Size = UDim2.new(1, -8, 0, 150),
+                    Size = UDim2.new(1, -8, 0, 126),
                     Position = UDim2.new(0, 4, 0, 0),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
@@ -6532,45 +6532,45 @@ function YinYang:CreateWindow(title_text, startTheme)
 
                 local PrevBtn = mk("TextButton", {
                     Parent = Viewport,
-                    Size = UDim2.new(0, 34, 0, 34),
-                    Position = UDim2.new(0, 8, 0.5, -17),
+                    Size = UDim2.new(0, 38, 0, 38),
+                    Position = UDim2.new(0, 4, 0.5, -19),
                     BackgroundColor3 = Theme.Background,
                     BackgroundTransparency = 0.18,
                     BorderSizePixel = 0,
                     Text = "‹",
                     TextColor3 = Theme.Text,
                     Font = Enum.Font.GothamBold,
-                    TextSize = 28,
+                    TextSize = 30,
                     AutoButtonColor = false,
-                    ZIndex = 30
+                    ZIndex = 60
                 })
-                corner(PrevBtn, 17)
+                corner(PrevBtn, 19)
                 stroke(PrevBtn, Theme.Stroke, 1, 0.5)
 
                 local NextBtn = mk("TextButton", {
                     Parent = Viewport,
-                    Size = UDim2.new(0, 34, 0, 34),
-                    Position = UDim2.new(1, -42, 0.5, -17),
+                    Size = UDim2.new(0, 38, 0, 38),
+                    Position = UDim2.new(1, -42, 0.5, -19),
                     BackgroundColor3 = Theme.Background,
                     BackgroundTransparency = 0.18,
                     BorderSizePixel = 0,
                     Text = "›",
                     TextColor3 = Theme.Text,
                     Font = Enum.Font.GothamBold,
-                    TextSize = 28,
+                    TextSize = 30,
                     AutoButtonColor = false,
-                    ZIndex = 30
+                    ZIndex = 60
                 })
-                corner(NextBtn, 17)
+                corner(NextBtn, 19)
                 stroke(NextBtn, Theme.Stroke, 1, 0.5)
 
                 local DotHolder = mk("Frame", {
                     Parent = SliderSection,
                     Size = UDim2.new(1, -80, 0, 18),
-                    Position = UDim2.new(0, 40, 0, 158),
+                    Position = UDim2.new(0, 40, 0, 138),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
-                    ZIndex = 30
+                    ZIndex = 60
                 })
                 mk("UIListLayout", {
                     Parent = DotHolder,
@@ -6618,10 +6618,11 @@ function YinYang:CreateWindow(title_text, startTheme)
 
                     local viewportWidth = Carousel.Viewport.AbsoluteSize.X
                     --// Proporción cercana a la referencia: tarjeta ancha, pero de poca altura.
-                    local cardWidth = math.clamp(viewportWidth * 0.56, 280, 390)
-                    local cardHeight = 128
-                    --// Separación real entre tarjetas: nunca se superponen entre sí.
-                    local step = cardWidth + math.max(16, viewportWidth * 0.025)
+                    local cardWidth = math.clamp(viewportWidth * 0.56, 260, 360)
+                    local cardHeight = 104
+                    --// Separación tipo carrusel: las tarjetas laterales asoman, pero la activa
+                    --// siempre queda por encima para que sus controles/texto no se mezclen.
+                    local step = cardWidth * 0.78
                     local centerX = viewportWidth * 0.5 - cardWidth * 0.5
 
                     for i, cardData in ipairs(Carousel.Cards) do
@@ -6630,8 +6631,9 @@ function YinYang:CreateWindow(title_text, startTheme)
                             local offset = (i - Carousel.ActiveIndex) * step
                             local distance = math.abs(i - Carousel.ActiveIndex)
                             local targetX = centerX + offset
-                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.90
+                            local targetWidth = distance == 0 and cardWidth or cardWidth * 0.88
                             local targetHeight = distance == 0 and cardHeight or cardHeight * 0.92
+                            local isActive = distance == 0
 
                             TweenService:Create(
                                 card,
@@ -6640,10 +6642,22 @@ function YinYang:CreateWindow(title_text, startTheme)
                                     Position = UDim2.new(0, targetX, 0, 4),
                                     Size = UDim2.new(0, targetWidth, 0, targetHeight),
                                     --// La tarjeta seleccionada domina visualmente; las laterales quedan atenuadas.
-                                    BackgroundTransparency = distance == 0 and 0.08 or 0.78
+                                    BackgroundTransparency = isActive and 0.12 or 0.72
                                 }
                             ):Play()
-                            card.ZIndex = distance == 0 and 30 or 10 - math.min(distance, 4)
+                            card.ZIndex = isActive and 50 or 20 - math.min(distance, 4)
+                            for _, descendant in ipairs(card:GetDescendants()) do
+                                if descendant:IsA("GuiObject") then
+                                    descendant.ZIndex = isActive and 51 or 21 - math.min(distance, 4)
+                                elseif descendant:IsA("UIStroke") then
+                                    descendant.ZIndex = isActive and 52 or 22 - math.min(distance, 4)
+                                end
+                                if descendant:IsA("TextLabel") or descendant:IsA("TextButton") then
+                                    descendant.TextTransparency = isActive and 0 or 0.35
+                                elseif descendant:IsA("ImageLabel") or descendant:IsA("ImageButton") then
+                                    descendant.ImageTransparency = isActive and 0 or 0.35
+                                end
+                            end
                         end
                     end
                     refreshDots()
@@ -6692,19 +6706,19 @@ function YinYang:CreateWindow(title_text, startTheme)
 
             local Holder = mk("Frame", {
                 Parent = Carousel.Viewport,
-                Size = UDim2.new(0, 350, 0, 128),
-                Position = UDim2.new(0, 0, 0, 4),
+                Size = UDim2.new(0, 320, 0, 104),
+                Position = UDim2.new(0, 0, 0, 10),
                 BackgroundColor3 = Theme.Secondary,
-                BackgroundTransparency = 0.78,
+                BackgroundTransparency = 0.72,
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
-                ZIndex = 19
+                ZIndex = 53
             })
             Holder:SetAttribute("ThemeRole", "Secondary")
             Holder:SetAttribute("IsSliderHolder", true)
-            corner(Holder, 16)
-            stroke(Holder, Theme.Stroke, 1.5, 0.55)
-            buildAnimatedBorder(Holder, Theme.Accent, UDim.new(0, 16), true)
+            corner(Holder, 14)
+            stroke(Holder, Theme.Stroke, 1.5, 0.45)
+            buildAnimatedBorder(Holder, Theme.Accent, UDim.new(0, 14), true)
             Holder.Visible = not SlidersHidden
 
             table.insert(Carousel.Cards, {Holder = Holder})
@@ -6746,13 +6760,13 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// LABEL PRINCIPAL
             local LabelTxt = mk("TextLabel", {
                 Parent = Holder,
-                Size = UDim2.new(1, -150, 0, 22),
-                Position = UDim2.new(0, 18, 0, 14),
+                Size = UDim2.new(1, -174, 0, 22),
+                Position = UDim2.new(0, 18, 0, 12),
                 BackgroundTransparency = 1,
                 Text = text,
                 TextColor3 = Theme.Text,
                 Font = Enum.Font.GothamBold,
-                TextSize = 13,
+                TextSize = 15,
                 TextXAlignment = Enum.TextXAlignment.Left,
                 TextTruncate = Enum.TextTruncate.AtEnd,
                 ZIndex = 16
@@ -6763,14 +6777,14 @@ function YinYang:CreateWindow(title_text, startTheme)
             local ValueLabel = mk("TextLabel", {
                 Parent = Holder,
                 Size = UDim2.new(0, 62, 0, 22),
-                Position = UDim2.new(1, -126, 0, 14),
+                Position = UDim2.new(1, -108, 0, 12),
                 BackgroundTransparency = 1,
                 Text = tostring(math.floor(value * 100) / 100),
                 TextColor3 = Theme.Accent,
                 Font = Enum.Font.GothamBold,
-                TextSize = 14,
+                TextSize = 15,
                 TextXAlignment = Enum.TextXAlignment.Right,
-                ZIndex = 16
+                ZIndex = 51
             })
             ValueLabel:SetAttribute("ThemeRole", "Accent")
 
@@ -6778,7 +6792,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             local MinLabel = mk("TextLabel", {
                 Parent = Holder,
                 Size = UDim2.new(0, 55, 0, 15),
-                Position = UDim2.new(0, 18, 1, -25),
+                Position = UDim2.new(0, 18, 1, -22),
                 BackgroundTransparency = 1,
                 Text = tostring(min),
                 TextColor3 = Theme.AccentOff,
@@ -6792,7 +6806,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             local MaxLabel = mk("TextLabel", {
                 Parent = Holder,
                 Size = UDim2.new(0, 55, 0, 15),
-                Position = UDim2.new(1, -73, 1, -25),
+                Position = UDim2.new(1, -73, 1, -22),
                 BackgroundTransparency = 1,
                 Text = tostring(max),
                 TextColor3 = Theme.AccentOff,
@@ -6807,11 +6821,11 @@ function YinYang:CreateWindow(title_text, startTheme)
             local SliderBackground = mk("Frame", {
                 Parent = Holder,
                 Size = UDim2.new(1, -36, 0, 6),
-                Position = UDim2.new(0, 18, 0, 76),
+                Position = UDim2.new(0, 18, 0, 62),
                 BackgroundColor3 = Theme.AccentOff,
                 BackgroundTransparency = 0.18,
                 BorderSizePixel = 0,
-                ZIndex = 16
+                ZIndex = 51
             })
             SliderBackground:SetAttribute("ThemeRole", "AccentOff")
             corner(SliderBackground, 3)
@@ -6822,7 +6836,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 Position = UDim2.new(0, 0, 0, 0),
                 BackgroundColor3 = Theme.Accent,
                 BorderSizePixel = 0,
-                ZIndex = 17
+                ZIndex = 52
             })
             SliderFill:SetAttribute("ThemeRole", "Accent")
             corner(SliderFill, 3)
@@ -6830,11 +6844,11 @@ function YinYang:CreateWindow(title_text, startTheme)
             --// THUMB
             local SliderThumb = mk("Frame", {
                 Parent = Holder,
-                Size = UDim2.new(0, 18, 0, 28),
-                Position = UDim2.new(0, 18, 0, 65),
+                Size = UDim2.new(0, 18, 0, 26),
+                Position = UDim2.new(0, 18, 0, 57),
                 BackgroundColor3 = Theme.Accent,
                 BorderSizePixel = 0,
-                ZIndex = 19
+                ZIndex = 53
             })
             SliderThumb:SetAttribute("ThemeRole", "Accent")
             corner(SliderThumb, 9)
@@ -6847,7 +6861,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 BackgroundColor3 = Theme.Accent,
                 BackgroundTransparency = 0.76,
                 BorderSizePixel = 0,
-                ZIndex = 18
+                ZIndex = 52
             })
             ThumbGlow:SetAttribute("ThemeRole", "Accent")
             corner(ThumbGlow, 12)
@@ -6864,7 +6878,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 TweenService:Create(
                     SliderThumb,
                     TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                    {Position = UDim2.new(0, thumbTargetX, 0, 65)}
+                    {Position = UDim2.new(0, thumbTargetX, 0, 57)}
                 ):Play()
 
                 TweenService:Create(
@@ -6886,7 +6900,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                        {Size = UDim2.new(0, 21, 0, 32)}
+                        {Size = UDim2.new(0, 21, 0, 30)}
                     ):Play()
                 end
             end
@@ -6897,7 +6911,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                        {Size = UDim2.new(0, 18, 0, 28)}
+                        {Size = UDim2.new(0, 18, 0, 26)}
                     ):Play()
 
                     playSound(Sounds.Click, 0.5)
@@ -6998,6 +7012,10 @@ function YinYang:CreateWindow(title_text, startTheme)
                     SyncFavoritesToConfig()
                 end)
             end
+
+            --// Reflow final: aplica visibilidad, ZIndex y transparencia a todos los controles
+            --// después de construir completamente la tarjeta.
+            Carousel.Reflow()
 
             if not isMirror then
                 Window._RegisterGlobalOption(self, {
