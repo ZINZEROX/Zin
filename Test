@@ -6513,7 +6513,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             if not Carousel then
                 local SliderSection = mk("Frame", {
                     Parent = TabPage,
-                    Size = UDim2.new(1, 0, 0, 166),
+                    Size = UDim2.new(1, 0, 0, 134),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     ZIndex = 9
@@ -6522,7 +6522,7 @@ function YinYang:CreateWindow(title_text, startTheme)
 
                 local Viewport = mk("Frame", {
                     Parent = SliderSection,
-                    Size = UDim2.new(1, -8, 0, 126),
+                    Size = UDim2.new(1, -8, 0, 110),
                     Position = UDim2.new(0, 4, 0, 0),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
@@ -6566,8 +6566,8 @@ function YinYang:CreateWindow(title_text, startTheme)
 
                 local DotHolder = mk("Frame", {
                     Parent = SliderSection,
-                    Size = UDim2.new(1, -80, 0, 18),
-                    Position = UDim2.new(0, 40, 0, 138),
+                    Size = UDim2.new(1, -80, 0, 16),
+                    Position = UDim2.new(0, 40, 0, 114),
                     BackgroundTransparency = 1,
                     BorderSizePixel = 0,
                     ZIndex = 60
@@ -6638,7 +6638,7 @@ function YinYang:CreateWindow(title_text, startTheme)
 
                             TweenService:Create(
                                 card,
-                                TweenInfo.new(0.22, Enum.EasingStyle.Quart, Enum.EasingDirection.Out),
+                                TweenInfo.new(0.15, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
                                 {
                                     Position = UDim2.new(0, targetX, 0, targetY),
                                     Size = UDim2.new(0, targetWidth, 0, targetHeight),
@@ -6711,6 +6711,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 BackgroundTransparency = 0.72,
                 BorderSizePixel = 0,
                 ClipsDescendants = true,
+                Active = true,
                 ZIndex = 53
             })
             Holder:SetAttribute("ThemeRole", "Secondary")
@@ -6824,6 +6825,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 BackgroundColor3 = Theme.AccentOff,
                 BackgroundTransparency = 0.18,
                 BorderSizePixel = 0,
+                Active = true,
                 ZIndex = 51
             })
             SliderBackground:SetAttribute("ThemeRole", "AccentOff")
@@ -6847,6 +6849,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                 Position = UDim2.new(0, 18, 0, 57),
                 BackgroundColor3 = Theme.Accent,
                 BorderSizePixel = 0,
+                Active = true,
                 ZIndex = 53
             })
             SliderThumb:SetAttribute("ThemeRole", "Accent")
@@ -6893,7 +6896,17 @@ function YinYang:CreateWindow(title_text, startTheme)
                 end)
             end
 
+            local function isThisCardActive()
+                for i, cardData in ipairs(Carousel.Cards) do
+                    if cardData.Holder == Holder then
+                        return i == Carousel.ActiveIndex
+                    end
+                end
+                return false
+            end
+
             local function OnSliderClick(input)
+                if not isThisCardActive() then return end
                 if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
                     isDragging = true
                     TweenService:Create(
@@ -6942,6 +6955,20 @@ function YinYang:CreateWindow(title_text, startTheme)
             end))
 
             track(UserInputService.InputEnded:Connect(OnSliderRelease))
+
+            --// FIX: el thumb se calcula con un ancho en píxeles (barWidth) tomado en
+            --// el momento del cálculo. El fill se autoajusta solo porque su Size es
+            --// por Scale, pero el thumb no, así que si el tamaño real de la tarjeta
+            --// cambia después (p.ej. al abrir la librería, cuando el carrusel recién
+            --// obtiene su ancho final), el thumb queda desalineado del final del fill.
+            --// Esto lo resincroniza al instante (sin tween) cada vez que cambia el
+            --// tamaño real del track.
+            track(SliderBackground:GetPropertyChangedSignal("AbsoluteSize"):Connect(function()
+                local currentPercentage = math.clamp((value - min) / (max - min), 0, 1)
+                local barWidth = SliderBackground.AbsoluteSize.X
+                local thumbTargetX = 18 + barWidth * currentPercentage - 9
+                SliderThumb.Position = UDim2.new(0, thumbTargetX, 0, 57)
+            end))
 
             --// INICIALIZAR CARD
             local initialPercentage = (value - min) / (max - min)
@@ -13452,7 +13479,7 @@ end
 
     -- Railway expone este dominio por HTTPS público; el proceso interno escucha en el puerto 8080.
     -- No se agrega :8080 porque ese puerto no está expuesto públicamente en el dominio Railway.
-    local BACKEND_URL = "chatglobal.up.railway.app"
+    local BACKEND_URL = "https://chatglobal.up.railway.app"
     local ChatSyncPollRate = 2  -- segundos entre cada consulta al backend
     local knownServerIds = {}   -- IDs de mensajes de servidor ya renderizados
     local backendConnected = false
