@@ -2948,6 +2948,97 @@ function YinYang:CreateWindow(title_text, startTheme)
         end
     end)
 
+    --// ════════════════════════════════════════════════════════════════════════
+    --// SUBTEXTO ROTATIVO — flota justo debajo de la BoomboxPill.
+    --// Ciclo de color: negro 3 s → blanco 6 s (constante).
+    --// Borde: rainbow animado vía Heartbeat.
+    --// Texto: cambia cada 10 s con fade in/out.
+    --// ════════════════════════════════════════════════════════════════════════
+    do
+        local SUBTEXT_MESSAGES = {
+            "✦  Yin Yang Creator Nick  ✦",
+            "✦  Report any bugs  ✦",
+            "✦  Remember to join the discord  ✦",
+            "✦  Thanks for using Yin Yang  ✦",
+        }
+
+        --// Label: overlay en Main, justo bajo la boombox pill
+        local SubText = mk("TextLabel", {
+            Parent = Main,
+            AnchorPoint = Vector2.new(0.5, 0),
+            Size = UDim2.new(0.72, 0, 0, 17),
+            Position = UDim2.new(0.5, 0, 0, 41),
+            BackgroundTransparency = 1,
+            Text = SUBTEXT_MESSAGES[1],
+            TextColor3 = Color3.new(0, 0, 0),
+            TextTransparency = 0,
+            Font = Enum.Font.GothamBold,
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 11,
+        })
+
+        --// UIStroke: borde más grueso para legibilidad + soporte rainbow
+        local SubStroke = mk("UIStroke", {
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+            Thickness = 1.8,
+            Transparency = 0,
+            Color = Color3.fromRGB(255, 220, 0),
+            LineJoinMode = Enum.LineJoinMode.Round,
+        }, SubText)
+
+        --// ── 1. Ciclo negro→blanco del texto (3 s negro, 6 s blanco) ──────────
+        task.spawn(function()
+            while SubText and SubText.Parent do
+                --// Fase negra: 3 segundos
+                TweenService:Create(SubText,
+                    TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { TextColor3 = Color3.new(0, 0, 0) }
+                ):Play()
+                task.wait(3)
+                --// Fase blanca: 6 segundos
+                TweenService:Create(SubText,
+                    TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { TextColor3 = Color3.new(1, 1, 1) }
+                ):Play()
+                task.wait(6)
+            end
+        end)
+
+        --// ── 2. Rainbow en el borde via Heartbeat (hue rota a 0.18/s) ─────────
+        local subtextHue = 0
+        track(RunService.Heartbeat:Connect(function(dt)
+            if not SubText or not SubText.Parent then return end
+            subtextHue = (subtextHue + dt * 0.18) % 1
+            SubStroke.Color = Color3.fromHSV(subtextHue, 0.92, 1)
+        end))
+
+        --// ── 3. Rotación de mensajes cada 10 s (fade out → swap → fade in) ────
+        local subtextIdx = 1
+        task.spawn(function()
+            while SubText and SubText.Parent do
+                task.wait(10)
+                if not SubText or not SubText.Parent then break end
+                --// Fade out suave
+                TweenService:Create(SubText,
+                    TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { TextTransparency = 1 }
+                ):Play()
+                task.wait(0.38)
+                if not SubText or not SubText.Parent then break end
+                --// Cambiar al siguiente mensaje
+                subtextIdx = (subtextIdx % #SUBTEXT_MESSAGES) + 1
+                SubText.Text = SUBTEXT_MESSAGES[subtextIdx]
+                --// Fade in suave
+                TweenService:Create(SubText,
+                    TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { TextTransparency = 0 }
+                ):Play()
+            end
+        end)
+    end
+
     --// CONTADOR DE JUGADORES ONLINE — derecha del BoomboxPill
     --// Declarado aquí (antes de StartBackendPolling) para ser capturado como upvalue
     local TopBarCounter = mk("Frame", {
