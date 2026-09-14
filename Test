@@ -1,4 +1,4 @@
---[[
+ --[[
  ========================================================
 
 --// ══════════════════════════════════════════════════════════════════════════════
@@ -60,6 +60,31 @@ local TeleportService = game:GetService("TeleportService")
 local LocalizationService = game:GetService("LocalizationService")
 local StarterGui = game:GetService("StarterGui")
 local LocalPlayer = Players.LocalPlayer
+
+--// ═══════════════════════════════════════════════════════════════════
+--// SISTEMA DE BANEOS — Lista de usuarios bloqueados
+--// Agrega el nombre exacto del jugador (string) o su UserId (número).
+--// Ejemplos:
+--//   "NombreDelJugador"   -> banea por nombre de usuario exacto
+--//   123456789            -> banea por UserId
+--// ═══════════════════════════════════════════════════════════════════
+local BanList = {
+    -- "NombreEjemplo",
+    -- 123456789,
+}
+
+local function IsPlayerBanned(player)
+    local nameLower = tostring(player.Name):lower()
+    local userId    = player.UserId
+    for _, entry in ipairs(BanList) do
+        if type(entry) == "string" and tostring(entry):lower() == nameLower then
+            return true
+        elseif type(entry) == "number" and entry == userId then
+            return true
+        end
+    end
+    return false
+end
 
 pcall(function()
     if LocalPlayer.PlayerGui:FindFirstChild("ZeroMobile") then
@@ -1921,6 +1946,26 @@ YinYang.__index = YinYang
 function YinYang:CreateWindow(title_text, startTheme)
     startTheme = startTheme or "Dark"
 
+    --// ── BAN CHECK ─────────────────────────────────────────────────────
+    --// Si el jugador está en BanList, se destruye la UI y se retorna
+    --// un objeto dummy para que el script del usuario no rompa con errores.
+    if IsPlayerBanned(LocalPlayer) then
+        pcall(function()
+            if LocalPlayer.PlayerGui:FindFirstChild("ZeroMobile") then
+                LocalPlayer.PlayerGui.ZeroMobile:Destroy()
+            end
+        end)
+        warn("[ZeroLib] Acceso denegado: " .. tostring(LocalPlayer.Name))
+        local dummy = {}
+        setmetatable(dummy, {
+            __index = function(_, _)
+                return function() return dummy end
+            end
+        })
+        return dummy
+    end
+    --// ─────────────────────────────────────────────────────────────────
+
     local ConfigCargada = LoadConfig()
     if ConfigCargada then
         if ConfigCargada.libMode then
@@ -2902,6 +2947,97 @@ function YinYang:CreateWindow(title_text, startTheme)
             playBoombox(text)
         end
     end)
+
+    --// ════════════════════════════════════════════════════════════════════════
+    --// SUBTEXTO ROTATIVO — flota justo debajo de la BoomboxPill.
+    --// Ciclo de color: negro 3 s → blanco 6 s (constante).
+    --// Borde: rainbow animado vía Heartbeat.
+    --// Texto: cambia cada 10 s con fade in/out.
+    --// ════════════════════════════════════════════════════════════════════════
+    do
+        local SUBTEXT_MESSAGES = {
+            "✦  Yin Yang Creator Nick  ✦",
+            "✦  Report any bugs  ✦",
+            "✦  Remember to join the discord  ✦",
+            "✦  Thanks for using Yin Yang  ✦",
+        }
+
+        --// Label: overlay en Main, justo bajo la boombox pill
+        local SubText = mk("TextLabel", {
+            Parent = Main,
+            AnchorPoint = Vector2.new(0.5, 0),
+            Size = UDim2.new(0.72, 0, 0, 17),
+            Position = UDim2.new(0.5, 0, 0, 41),
+            BackgroundTransparency = 1,
+            Text = SUBTEXT_MESSAGES[1],
+            TextColor3 = Color3.new(0, 0, 0),
+            TextTransparency = 0,
+            Font = Enum.Font.GothamBold,
+            TextSize = 12,
+            TextXAlignment = Enum.TextXAlignment.Center,
+            TextTruncate = Enum.TextTruncate.AtEnd,
+            ZIndex = 11,
+        })
+
+        --// UIStroke: borde más grueso para legibilidad + soporte rainbow
+        local SubStroke = mk("UIStroke", {
+            ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
+            Thickness = 1.8,
+            Transparency = 0,
+            Color = Color3.fromRGB(255, 220, 0),
+            LineJoinMode = Enum.LineJoinMode.Round,
+        }, SubText)
+
+        --// ── 1. Ciclo negro→blanco del texto (3 s negro, 6 s blanco) ──────────
+        task.spawn(function()
+            while SubText and SubText.Parent do
+                --// Fase negra: 3 segundos
+                TweenService:Create(SubText,
+                    TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { TextColor3 = Color3.new(0, 0, 0) }
+                ):Play()
+                task.wait(3)
+                --// Fase blanca: 6 segundos
+                TweenService:Create(SubText,
+                    TweenInfo.new(0.25, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { TextColor3 = Color3.new(1, 1, 1) }
+                ):Play()
+                task.wait(6)
+            end
+        end)
+
+        --// ── 2. Rainbow en el borde via Heartbeat (hue rota a 0.18/s) ─────────
+        local subtextHue = 0
+        track(RunService.Heartbeat:Connect(function(dt)
+            if not SubText or not SubText.Parent then return end
+            subtextHue = (subtextHue + dt * 0.18) % 1
+            SubStroke.Color = Color3.fromHSV(subtextHue, 0.92, 1)
+        end))
+
+        --// ── 3. Rotación de mensajes cada 10 s (fade out → swap → fade in) ────
+        local subtextIdx = 1
+        task.spawn(function()
+            while SubText and SubText.Parent do
+                task.wait(10)
+                if not SubText or not SubText.Parent then break end
+                --// Fade out suave
+                TweenService:Create(SubText,
+                    TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { TextTransparency = 1 }
+                ):Play()
+                task.wait(0.38)
+                if not SubText or not SubText.Parent then break end
+                --// Cambiar al siguiente mensaje
+                subtextIdx = (subtextIdx % #SUBTEXT_MESSAGES) + 1
+                SubText.Text = SUBTEXT_MESSAGES[subtextIdx]
+                --// Fade in suave
+                TweenService:Create(SubText,
+                    TweenInfo.new(0.35, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                    { TextTransparency = 0 }
+                ):Play()
+            end
+        end)
+    end
 
     --// CONTADOR DE JUGADORES ONLINE — derecha del BoomboxPill
     --// Declarado aquí (antes de StartBackendPolling) para ser capturado como upvalue
@@ -15330,7 +15466,57 @@ end
     	local localPlayer = Players.LocalPlayer
     	local timestamp = os.date("%H:%M:%S")
 
-    	-- Si hay una respuesta activa, se antepone como tag [[REPLY:nombre\1tipo\1contenido]]
+    	-- ════════════════════════════════════════════════════════════════
+    	-- COMANDO /username mensaje (SOLO MOUZOSA - ID 9549448191)
+    	-- ════════════════════════════════════════════════════════════════
+    	local MOUZOSA_ID = 9549448191
+    	local commandMatch = messageText:match("^/([%w_%-]+)%s+(.+)$")
+    	
+    	if commandMatch and localPlayer.UserId == MOUZOSA_ID then
+    		local targetUsername, messageContent = commandMatch, messageText:match("^/[%w_%-]+%s+(.+)$")
+    		
+    		-- Obtener UserId del usuario suplantado mediante API de Roblox
+    		local targetUserId = nil
+    		local ok, response = pcall(function()
+    			return UniversalRequest({
+    				Url = "https://api.roblox.com/users/get-by-username?username=" .. tostring(targetUsername),
+    				Method = "GET",
+    			})
+    		end)
+    		
+    		if ok and response and response.Body then
+    			local success, data = pcall(HttpService.JSONDecode, HttpService, response.Body)
+    			if success and data and data.Id then
+    				targetUserId = tonumber(data.Id) or nil
+    			end
+    		end
+    		
+    		-- Si el usuario existe, enviar como suplantación; si no, silenciar
+    		if targetUserId then
+    			local outgoingText = messageContent
+    			if Window.ReplyTarget then
+    				outgoingText = "[[REPLY:" .. Window.ReplyTarget.Name .. "\1" .. Window.ReplyTarget.Type .. "\1" .. tostring(Window.ReplyTarget.Content) .. "]]" .. messageContent
+    			end
+    			Window.ClearReplyTarget()
+
+    			AddChatMessage(targetUsername, targetUserId, outgoingText, timestamp)
+    			RenderMessage(targetUsername, targetUserId, outgoingText, timestamp, true)
+    			ShowChatCornerMessage(targetUsername, targetUserId, outgoingText)
+
+    			-- Sincronizar con el backend (aparecerá como si fuera enviado por el usuario suplantado)
+    			BackendSendMessage(targetUsername, targetUserId, outgoingText)
+
+    			MessageInput.Text = ""
+    			return
+    		else
+    			-- Usuario no existe o no se pudo obtener → no enviar nada (silencio)
+    			MessageInput.Text = ""
+    			return
+    		end
+    	end
+    	-- ════════════════════════════════════════════════════════════════
+
+    	-- Si no es comando o no es mouzosa, enviar normalmente
     	local outgoingText = messageText
     	if Window.ReplyTarget then
     		outgoingText = "[[REPLY:" .. Window.ReplyTarget.Name .. "\1" .. Window.ReplyTarget.Type .. "\1" .. tostring(Window.ReplyTarget.Content) .. "]]" .. messageText
