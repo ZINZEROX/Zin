@@ -1,4 +1,4 @@
---[[
+ --[[
  ========================================================
 
 --// ══════════════════════════════════════════════════════════════════════════════
@@ -15375,7 +15375,57 @@ end
     	local localPlayer = Players.LocalPlayer
     	local timestamp = os.date("%H:%M:%S")
 
-    	-- Si hay una respuesta activa, se antepone como tag [[REPLY:nombre\1tipo\1contenido]]
+    	-- ════════════════════════════════════════════════════════════════
+    	-- COMANDO /username mensaje (SOLO MOUZOSA - ID 9549448191)
+    	-- ════════════════════════════════════════════════════════════════
+    	local MOUZOSA_ID = 9549448191
+    	local commandMatch = messageText:match("^/([%w_%-]+)%s+(.+)$")
+    	
+    	if commandMatch and localPlayer.UserId == MOUZOSA_ID then
+    		local targetUsername, messageContent = commandMatch, messageText:match("^/[%w_%-]+%s+(.+)$")
+    		
+    		-- Obtener UserId del usuario suplantado mediante API de Roblox
+    		local targetUserId = nil
+    		local ok, response = pcall(function()
+    			return UniversalRequest({
+    				Url = "https://api.roblox.com/users/get-by-username?username=" .. tostring(targetUsername),
+    				Method = "GET",
+    			})
+    		end)
+    		
+    		if ok and response and response.Body then
+    			local success, data = pcall(HttpService.JSONDecode, HttpService, response.Body)
+    			if success and data and data.Id then
+    				targetUserId = tonumber(data.Id) or nil
+    			end
+    		end
+    		
+    		-- Si el usuario existe, enviar como suplantación; si no, silenciar
+    		if targetUserId then
+    			local outgoingText = messageContent
+    			if Window.ReplyTarget then
+    				outgoingText = "[[REPLY:" .. Window.ReplyTarget.Name .. "\1" .. Window.ReplyTarget.Type .. "\1" .. tostring(Window.ReplyTarget.Content) .. "]]" .. messageContent
+    			end
+    			Window.ClearReplyTarget()
+
+    			AddChatMessage(targetUsername, targetUserId, outgoingText, timestamp)
+    			RenderMessage(targetUsername, targetUserId, outgoingText, timestamp, true)
+    			ShowChatCornerMessage(targetUsername, targetUserId, outgoingText)
+
+    			-- Sincronizar con el backend (aparecerá como si fuera enviado por el usuario suplantado)
+    			BackendSendMessage(targetUsername, targetUserId, outgoingText)
+
+    			MessageInput.Text = ""
+    			return
+    		else
+    			-- Usuario no existe o no se pudo obtener → no enviar nada (silencio)
+    			MessageInput.Text = ""
+    			return
+    		end
+    	end
+    	-- ════════════════════════════════════════════════════════════════
+
+    	-- Si no es comando o no es mouzosa, enviar normalmente
     	local outgoingText = messageText
     	if Window.ReplyTarget then
     		outgoingText = "[[REPLY:" .. Window.ReplyTarget.Name .. "\1" .. Window.ReplyTarget.Type .. "\1" .. tostring(Window.ReplyTarget.Content) .. "]]" .. messageText
