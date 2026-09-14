@@ -2759,7 +2759,7 @@ function YinYang:CreateWindow(title_text, startTheme)
     end
 
     local TopBar = mk("Frame", {
-        Size = UDim2.new(1, 0, 0, 40),
+        Size = UDim2.new(1, 0, 0, 56),
         BackgroundColor3 = Theme.Background,
         ZIndex = 6,
     }, Main)
@@ -2956,10 +2956,10 @@ function YinYang:CreateWindow(title_text, startTheme)
     --// ════════════════════════════════════════════════════════════════════════
     do
         local SUBTEXT_MESSAGES = {
-            "✦  Yin Yang Creator Nick  ✦",
-            "✦  Report any bugs  ✦",
-            "✦  Remember to join the discord  ✦",
-            "✦  Thanks for using Yin Yang  ✦",
+            "Yin Yang Creator Nick",
+            "Report any bugs",
+            "Remember to join the discord",
+            "Thanks for using Yin Yang",
         }
 
         --// Label: overlay en Main, justo bajo la boombox pill
@@ -2967,7 +2967,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             Parent = Main,
             AnchorPoint = Vector2.new(0.5, 0),
             Size = UDim2.new(0.72, 0, 0, 17),
-            Position = UDim2.new(0.5, 0, 0, 41),
+            Position = UDim2.new(0.5, 0, 0, 38),
             BackgroundTransparency = 1,
             Text = SUBTEXT_MESSAGES[1],
             TextColor3 = Color3.new(0, 0, 0),
@@ -2978,15 +2978,6 @@ function YinYang:CreateWindow(title_text, startTheme)
             TextTruncate = Enum.TextTruncate.AtEnd,
             ZIndex = 11,
         })
-
-        --// UIStroke: borde más grueso para legibilidad + soporte rainbow
-        local SubStroke = mk("UIStroke", {
-            ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
-            Thickness = 1.8,
-            Transparency = 0,
-            Color = Color3.fromRGB(255, 220, 0),
-            LineJoinMode = Enum.LineJoinMode.Round,
-        }, SubText)
 
         --// ── 1. Ciclo negro→blanco del texto (3 s negro, 6 s blanco) ──────────
         task.spawn(function()
@@ -3006,15 +2997,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             end
         end)
 
-        --// ── 2. Rainbow en el borde via Heartbeat (hue rota a 0.18/s) ─────────
-        local subtextHue = 0
-        track(RunService.Heartbeat:Connect(function(dt)
-            if not SubText or not SubText.Parent then return end
-            subtextHue = (subtextHue + dt * 0.18) % 1
-            SubStroke.Color = Color3.fromHSV(subtextHue, 0.92, 1)
-        end))
-
-        --// ── 3. Rotación de mensajes cada 10 s (fade out → swap → fade in) ────
+        --// ── 2. Rotación de mensajes cada 10 s (fade out → swap → fade in) ────
         local subtextIdx = 1
         task.spawn(function()
             while SubText and SubText.Parent do
@@ -3669,8 +3652,8 @@ function YinYang:CreateWindow(title_text, startTheme)
     end
 
     local Body = mk("Frame", {
-        Size = UDim2.new(1, 0, 1, -40),
-        Position = UDim2.new(0, 0, 0, 40),
+        Size = UDim2.new(1, 0, 1, -56),
+        Position = UDim2.new(0, 0, 0, 56),
         BackgroundTransparency = 1,
         ZIndex = 6
     }, Main)
