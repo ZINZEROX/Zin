@@ -1490,6 +1490,16 @@ local function stopGlowTweens(key)
 end
 
 --// Limpia GlowLayers que pertenecen a un frame específico (por tag único)
+local function setGlowLayersVisible(frame, visible)
+    if not frame.Parent then return end
+    local tag = "GLOW_" .. tostring(frame)
+    for _, child in ipairs(frame.Parent:GetChildren()) do
+        if child:GetAttribute("GlowOwner") == tag then
+            child.Visible = visible
+        end
+    end
+end
+
 local function cleanGlowLayers(frame)
     local tag = "GLOW_" .. tostring(frame)
     if frame.Parent then
@@ -2604,11 +2614,32 @@ function YinYang:CreateWindow(title_text, startTheme)
     local activeWindowTween = nil
 
     local function setMainGlowEnabled(enabled)
+        local key = tostring(Main)
         if enabled then
-            buildAnimatedBorder(Main, Theme.Accent, UDim.new(0, 10))
+            local hasGlow = false
+            if Main.Parent then
+                local tag = "GLOW_" .. key
+                for _, child in ipairs(Main.Parent:GetChildren()) do
+                    if child:GetAttribute("GlowOwner") == tag then
+                        hasGlow = true
+                        child.Visible = true
+                    end
+                end
+            end
+
+            if hasGlow then
+                local tweens = ActiveGlowTweens[key]
+                if tweens then
+                    for _, tw in ipairs(tweens) do
+                        pcall(function() tw:Play() end)
+                    end
+                end
+            else
+                buildAnimatedBorder(Main, Theme.Accent, UDim.new(0, 10))
+            end
         else
-            stopGlowTweens(tostring(Main))
-            cleanGlowLayers(Main)
+            stopGlowTweens(key)
+            setGlowLayersVisible(Main, false)
         end
     end
 
@@ -6609,6 +6640,7 @@ function YinYang:CreateWindow(title_text, startTheme)
         --// Cada llamada a CreateSlider crea una tarjeta independiente dentro de la pestaña.
         function Tab:CreateSlider(text, min, max, default, callback, isMirror)
             local value = default or min
+            local pendingValue = value
             local isDragging = false
             local lastUpdateTime = 0
             local UPDATE_THROTTLE = 0.008
@@ -6987,32 +7019,42 @@ function YinYang:CreateWindow(title_text, startTheme)
             ThumbGlow:SetAttribute("ThemeRole", "Accent")
             corner(ThumbGlow, 12)
 
-            local function UpdateSlider(percentage)
+            local function UpdateSlider(percentage, commit, animate)
                 percentage = math.clamp(percentage, 0, 1)
-                value = min + (max - min) * percentage
+                pendingValue = min + (max - min) * percentage
+                if commit then
+                    value = pendingValue
+                end
 
                 local barWidth = SliderBackground.AbsoluteSize.X
                 local targetSize = UDim2.new(percentage, 0, 1, 0)
-                TweenService:Create(SliderFill, TweenInfo.new(0.05), {Size = targetSize}):Play()
+                local thumbTarget = UDim2.new(0, 18 + barWidth * percentage - 9, 0, 57)
 
-                local thumbTargetX = 18 + barWidth * percentage - 9
-                TweenService:Create(
-                    SliderThumb,
-                    TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                    {Position = UDim2.new(0, thumbTargetX, 0, 57)}
-                ):Play()
+                if animate then
+                    TweenService:Create(SliderFill, TweenInfo.new(0.05), {Size = targetSize}):Play()
+                    TweenService:Create(
+                        SliderThumb,
+                        TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                        {Position = thumbTarget}
+                    ):Play()
+                    TweenService:Create(
+                        ThumbGlow,
+                        TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                        {BackgroundTransparency = 0.4}
+                    ):Play()
+                else
+                    SliderFill.Size = targetSize
+                    SliderThumb.Position = thumbTarget
+                    ThumbGlow.BackgroundTransparency = 0.4
+                end
 
-                TweenService:Create(
-                    ThumbGlow,
-                    TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-                    {BackgroundTransparency = 0.4}
-                ):Play()
+                ValueLabel.Text = tostring(math.floor(pendingValue * 100) / 100)
 
-                ValueLabel.Text = tostring(math.floor(value * 100) / 100)
-
-                task.spawn(function()
-                    pcall(callback, value)
-                end)
+                if commit then
+                    task.spawn(function()
+                        pcall(callback, value)
+                    end)
+                end
             end
 
             local function isThisCardActive()
@@ -7038,7 +7080,9 @@ function YinYang:CreateWindow(title_text, startTheme)
 
             local function OnSliderRelease(input)
                 if isDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                    local percentage = math.clamp((pendingValue - min) / (max - min), 0, 1)
                     isDragging = false
+                    UpdateSlider(percentage, true, true)
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -7068,7 +7112,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                         local barWidth = SliderBackground.AbsoluteSize.X
                         local percentage = math.clamp(relativeX / barWidth, 0, 1)
 
-                        UpdateSlider(percentage)
+                        UpdateSlider(percentage, false, false)
                     end
                 end
             end))
