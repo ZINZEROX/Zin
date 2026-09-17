@@ -1490,6 +1490,16 @@ local function stopGlowTweens(key)
 end
 
 --// Limpia GlowLayers que pertenecen a un frame específico (por tag único)
+local function setGlowLayersVisible(frame, visible)
+    if not frame.Parent then return end
+    local tag = "GLOW_" .. tostring(frame)
+    for _, child in ipairs(frame.Parent:GetChildren()) do
+        if child:GetAttribute("GlowOwner") == tag then
+            child.Visible = visible
+        end
+    end
+end
+
 local function cleanGlowLayers(frame)
     local tag = "GLOW_" .. tostring(frame)
     if frame.Parent then
@@ -2604,11 +2614,32 @@ function YinYang:CreateWindow(title_text, startTheme)
     local activeWindowTween = nil
 
     local function setMainGlowEnabled(enabled)
+        local key = tostring(Main)
         if enabled then
-            buildAnimatedBorder(Main, Theme.Accent, UDim.new(0, 10))
+            local hasGlow = false
+            if Main.Parent then
+                local tag = "GLOW_" .. key
+                for _, child in ipairs(Main.Parent:GetChildren()) do
+                    if child:GetAttribute("GlowOwner") == tag then
+                        hasGlow = true
+                        child.Visible = true
+                    end
+                end
+            end
+
+            if hasGlow then
+                local tweens = ActiveGlowTweens[key]
+                if tweens then
+                    for _, tw in ipairs(tweens) do
+                        pcall(function() tw:Play() end)
+                    end
+                end
+            else
+                buildAnimatedBorder(Main, Theme.Accent, UDim.new(0, 10))
+            end
         else
-            stopGlowTweens(tostring(Main))
-            cleanGlowLayers(Main)
+            stopGlowTweens(key)
+            setGlowLayersVisible(Main, false)
         end
     end
 
@@ -2759,7 +2790,7 @@ function YinYang:CreateWindow(title_text, startTheme)
     end
 
     local TopBar = mk("Frame", {
-        Size = UDim2.new(1, 0, 0, 40),
+        Size = UDim2.new(1, 0, 0, 56),
         BackgroundColor3 = Theme.Background,
         ZIndex = 6,
     }, Main)
@@ -2956,10 +2987,10 @@ function YinYang:CreateWindow(title_text, startTheme)
     --// ════════════════════════════════════════════════════════════════════════
     do
         local SUBTEXT_MESSAGES = {
-            "✦  Yin Yang Creator Nick  ✦",
-            "✦  Report any bugs  ✦",
-            "✦  Remember to join the discord  ✦",
-            "✦  Thanks for using Yin Yang  ✦",
+            "Yin Yang Creator Nick",
+            "Report any bugs",
+            "Remember to join the discord",
+            "Thanks for using Yin Yang",
         }
 
         --// Label: overlay en Main, justo bajo la boombox pill
@@ -2967,7 +2998,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             Parent = Main,
             AnchorPoint = Vector2.new(0.5, 0),
             Size = UDim2.new(0.72, 0, 0, 17),
-            Position = UDim2.new(0.5, 0, 0, 41),
+            Position = UDim2.new(0.5, 0, 0, 38),
             BackgroundTransparency = 1,
             Text = SUBTEXT_MESSAGES[1],
             TextColor3 = Color3.new(0, 0, 0),
@@ -2978,15 +3009,6 @@ function YinYang:CreateWindow(title_text, startTheme)
             TextTruncate = Enum.TextTruncate.AtEnd,
             ZIndex = 11,
         })
-
-        --// UIStroke: borde más grueso para legibilidad + soporte rainbow
-        local SubStroke = mk("UIStroke", {
-            ApplyStrokeMode = Enum.ApplyStrokeMode.Contextual,
-            Thickness = 1.8,
-            Transparency = 0,
-            Color = Color3.fromRGB(255, 220, 0),
-            LineJoinMode = Enum.LineJoinMode.Round,
-        }, SubText)
 
         --// ── 1. Ciclo negro→blanco del texto (3 s negro, 6 s blanco) ──────────
         task.spawn(function()
@@ -3006,15 +3028,7 @@ function YinYang:CreateWindow(title_text, startTheme)
             end
         end)
 
-        --// ── 2. Rainbow en el borde via Heartbeat (hue rota a 0.18/s) ─────────
-        local subtextHue = 0
-        track(RunService.Heartbeat:Connect(function(dt)
-            if not SubText or not SubText.Parent then return end
-            subtextHue = (subtextHue + dt * 0.18) % 1
-            SubStroke.Color = Color3.fromHSV(subtextHue, 0.92, 1)
-        end))
-
-        --// ── 3. Rotación de mensajes cada 10 s (fade out → swap → fade in) ────
+        --// ── 2. Rotación de mensajes cada 10 s (fade out → swap → fade in) ────
         local subtextIdx = 1
         task.spawn(function()
             while SubText and SubText.Parent do
@@ -3669,8 +3683,8 @@ function YinYang:CreateWindow(title_text, startTheme)
     end
 
     local Body = mk("Frame", {
-        Size = UDim2.new(1, 0, 1, -40),
-        Position = UDim2.new(0, 0, 0, 40),
+        Size = UDim2.new(1, 0, 1, -56),
+        Position = UDim2.new(0, 0, 0, 56),
         BackgroundTransparency = 1,
         ZIndex = 6
     }, Main)
@@ -6626,6 +6640,7 @@ function YinYang:CreateWindow(title_text, startTheme)
         --// Cada llamada a CreateSlider crea una tarjeta independiente dentro de la pestaña.
         function Tab:CreateSlider(text, min, max, default, callback, isMirror)
             local value = default or min
+            local pendingValue = value
             local isDragging = false
             local lastUpdateTime = 0
             local UPDATE_THROTTLE = 0.008
@@ -7004,32 +7019,42 @@ function YinYang:CreateWindow(title_text, startTheme)
             ThumbGlow:SetAttribute("ThemeRole", "Accent")
             corner(ThumbGlow, 12)
 
-            local function UpdateSlider(percentage)
+            local function UpdateSlider(percentage, commit, animate)
                 percentage = math.clamp(percentage, 0, 1)
-                value = min + (max - min) * percentage
+                pendingValue = min + (max - min) * percentage
+                if commit then
+                    value = pendingValue
+                end
 
                 local barWidth = SliderBackground.AbsoluteSize.X
                 local targetSize = UDim2.new(percentage, 0, 1, 0)
-                TweenService:Create(SliderFill, TweenInfo.new(0.05), {Size = targetSize}):Play()
+                local thumbTarget = UDim2.new(0, 18 + barWidth * percentage - 9, 0, 57)
 
-                local thumbTargetX = 18 + barWidth * percentage - 9
-                TweenService:Create(
-                    SliderThumb,
-                    TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
-                    {Position = UDim2.new(0, thumbTargetX, 0, 57)}
-                ):Play()
+                if animate then
+                    TweenService:Create(SliderFill, TweenInfo.new(0.05), {Size = targetSize}):Play()
+                    TweenService:Create(
+                        SliderThumb,
+                        TweenInfo.new(0.04, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
+                        {Position = thumbTarget}
+                    ):Play()
+                    TweenService:Create(
+                        ThumbGlow,
+                        TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
+                        {BackgroundTransparency = 0.4}
+                    ):Play()
+                else
+                    SliderFill.Size = targetSize
+                    SliderThumb.Position = thumbTarget
+                    ThumbGlow.BackgroundTransparency = 0.4
+                end
 
-                TweenService:Create(
-                    ThumbGlow,
-                    TweenInfo.new(0.2, Enum.EasingStyle.Sine, Enum.EasingDirection.InOut),
-                    {BackgroundTransparency = 0.4}
-                ):Play()
+                ValueLabel.Text = tostring(math.floor(pendingValue * 100) / 100)
 
-                ValueLabel.Text = tostring(math.floor(value * 100) / 100)
-
-                task.spawn(function()
-                    pcall(callback, value)
-                end)
+                if commit then
+                    task.spawn(function()
+                        pcall(callback, value)
+                    end)
+                end
             end
 
             local function isThisCardActive()
@@ -7055,7 +7080,9 @@ function YinYang:CreateWindow(title_text, startTheme)
 
             local function OnSliderRelease(input)
                 if isDragging and (input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch) then
+                    local percentage = math.clamp((pendingValue - min) / (max - min), 0, 1)
                     isDragging = false
+                    UpdateSlider(percentage, true, true)
                     TweenService:Create(
                         SliderThumb,
                         TweenInfo.new(0.1, Enum.EasingStyle.Quad, Enum.EasingDirection.Out),
@@ -7085,7 +7112,7 @@ function YinYang:CreateWindow(title_text, startTheme)
                         local barWidth = SliderBackground.AbsoluteSize.X
                         local percentage = math.clamp(relativeX / barWidth, 0, 1)
 
-                        UpdateSlider(percentage)
+                        UpdateSlider(percentage, false, false)
                     end
                 end
             end))
@@ -16398,10 +16425,10 @@ end
 
     SPage.BackgroundColor3 = Theme.Background
     SPage.BackgroundTransparency = 1
-    SPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    SPage.AutomaticCanvasSize = Enum.AutomaticSize.None
     SPage.CanvasSize = UDim2.new(0, 0, 0, 0)
-    SPage.ScrollBarThickness = 2
-    SPage.ScrollingEnabled = true
+    SPage.ScrollBarThickness = 0
+    SPage.ScrollingEnabled = false
 
     local SPOTIFY_CATALOG_URL = "https://raw.githubusercontent.com/nbritez672-tech/Yin-music/refs/heads/main/YinYang_Spotify_Catalog.lua"
 
@@ -16538,6 +16565,7 @@ end
         PlaybackSpeed = 1,
         SettingsMenuVisible = false,
         FloatingPlayerVisible = false,
+        FavoritesView = false,
     }
 
     local refreshSpotifyFloatingPlayer = function() end
@@ -16589,8 +16617,16 @@ end
     local function getVisibleRenderOrder()
         local query = normalizeSearchText(SpotifyState.SearchQuery or "")
         local order = getRenderOrder()
+        local filtered = {}
+
+        for _, index in ipairs(order) do
+            if not SpotifyState.FavoritesView or SpotifyState.CurrentLiked[index] == true then
+                filtered[#filtered + 1] = index
+            end
+        end
+
         if query == "" then
-            return order
+            return filtered
         end
 
         local tokens = {}
@@ -16598,8 +16634,11 @@ end
             tokens[#tokens + 1] = token
         end
 
-        local filtered = {}
+        table.clear(filtered)
         for _, index in ipairs(order) do
+            if SpotifyState.FavoritesView and SpotifyState.CurrentLiked[index] ~= true then
+                continue
+            end
             local track = SpotifyState.Catalog[index]
             if track then
                 local haystack = normalizeSearchText((track.Name or "") .. " " .. (track.Artist or "") .. " " .. (track.Duration or ""))
@@ -16668,37 +16707,33 @@ end
 
     local SpotifyRoot = mk("Frame", {
         Parent = SPage,
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ClipsDescendants = false,
         LayoutOrder = 1,
-        AutomaticSize = Enum.AutomaticSize.Y,
+        AutomaticSize = Enum.AutomaticSize.None,
         ZIndex = 10,
     })
 
     mk("UIPadding", {
         Parent = SpotifyRoot,
-        PaddingTop = UDim.new(0, 8),
-        PaddingLeft = UDim.new(0, 8),
-        PaddingRight = UDim.new(0, 8),
-        PaddingBottom = UDim.new(0, 10),
+        PaddingTop = UDim.new(0, 0),
+        PaddingLeft = UDim.new(0, 0),
+        PaddingRight = UDim.new(0, 0),
+        PaddingBottom = UDim.new(0, 0),
     })
 
     local SpotifyRootLayout = mk("UIListLayout", {
         Parent = SpotifyRoot,
-        Padding = UDim.new(0, 10),
+        Padding = UDim.new(0, 0),
         SortOrder = Enum.SortOrder.LayoutOrder,
     })
 
     local SongList, SongListLayout
 
     local function updateSpotifyCanvas()
-        local contentY = 0
-        pcall(function()
-            contentY = SpotifyRootLayout.AbsoluteContentSize.Y
-        end)
-        SPage.CanvasSize = UDim2.new(0, 0, 0, math.max(0, math.floor(contentY + 20)))
+        SPage.CanvasSize = UDim2.new(0, 0, 0, 0)
     end
 
     local function updateSongListCanvas()
@@ -16716,55 +16751,96 @@ end
         -- En la versión estable la lista se autoexpande por contenido.
         -- Si el layout tarda un frame en reportar tamaño, esta función
         -- solo fuerza una nueva lectura para refrescar el canvas padre.
-        if SongList.AutomaticSize == Enum.AutomaticSize.None then
-            SongList.Size = UDim2.new(1, 0, 0, math.max(0, math.floor(contentY + 8)))
-        end
+        SongList.CanvasSize = UDim2.new(0, 0, 0, math.max(0, math.floor(contentY + 8)))
     end
 
     -- Header eliminado: el título "Spotify • NEW" ya no ocupa espacio extra
 
     local SpotifyShell = mk("Frame", {
         Parent = SpotifyRoot,
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundColor3 = spotifyPanel,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         LayoutOrder = 1,
-        ClipsDescendants = false,
-        AutomaticSize = Enum.AutomaticSize.Y,
+        ClipsDescendants = true,
         ZIndex = 10,
     })
     corner(SpotifyShell, 18)
     stroke(SpotifyShell, Color3.fromRGB(90, 90, 96), 1, 0.35)
 
-    mk("UIPadding", {
+    local SpotifyPages = mk("UIPageLayout", {
         Parent = SpotifyShell,
-        PaddingTop = UDim.new(0, 10),
-        PaddingLeft = UDim.new(0, 10),
-        PaddingRight = UDim.new(0, 10),
-        PaddingBottom = UDim.new(0, 10),
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Animated = true,
+        TweenTime = 0.28,
+        EasingStyle = Enum.EasingStyle.Quart,
+        EasingDirection = Enum.EasingDirection.Out,
+        TouchInputEnabled = true,
+        GamepadInputEnabled = false,
+        ScrollWheelInputEnabled = false,
+        Circular = false,
     })
 
-    mk("UIListLayout", {
+    local PlayerPage = mk("Frame", {
         Parent = SpotifyShell,
-        Padding = UDim.new(0, 12),
-        SortOrder = Enum.SortOrder.LayoutOrder,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        LayoutOrder = 1,
+        ClipsDescendants = true,
+        ZIndex = 10,
+    })
+
+    local CatalogPage = mk("Frame", {
+        Parent = SpotifyShell,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        LayoutOrder = 2,
+        ClipsDescendants = true,
+        ZIndex = 10,
     })
 
     -- ═══════════════════════════════════════════════════════
     -- CARD REDISEÑADA: Imagen ARRIBA centrada y grande
     -- ═══════════════════════════════════════════════════════
     local NowPlayingCard = mk("Frame", {
-        Parent = SpotifyShell,
-        Size = UDim2.new(1, 0, 0, 413),
+        Parent = PlayerPage,
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundColor3 = spotifyPanel,
-        BackgroundTransparency = 0.88,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         LayoutOrder = 1,
         ZIndex = 11,
     })
     corner(NowPlayingCard, 16)
     stroke(NowPlayingCard, Color3.fromRGB(90, 90, 96), 1, 0.45)
+
+    local NowPlayingBackdrop = mk("ImageLabel", {
+        Parent = NowPlayingCard,
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Theme.Background,
+        BackgroundTransparency = 0.05,
+        BorderSizePixel = 0,
+        Image = "",
+        ImageTransparency = 1,
+        ScaleType = Enum.ScaleType.Crop,
+        ZIndex = 11,
+    })
+    corner(NowPlayingBackdrop, 16)
+
+    local NowPlayingShade = mk("Frame", {
+        Parent = NowPlayingCard,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.45,
+        BorderSizePixel = 0,
+        ZIndex = 12,
+    })
+    corner(NowPlayingShade, 16)
 
     -- Botón "..." en esquina superior derecha
     local MoreTopBtn = mk("ImageButton", {
@@ -16821,7 +16897,7 @@ end
         Position = UDim2.new(0, 14, 0, 212),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ZIndex = 12,
+        ZIndex = 20,
     })
 
     local PlayerSongTitle = mk("TextLabel", {
@@ -16931,7 +17007,7 @@ end
         BackgroundTransparency = 1,
         Text = "",
         AutoButtonColor = false,
-        ZIndex = 14,
+        ZIndex = 22,
     })
 
     local isSeeking = false
@@ -17011,7 +17087,7 @@ end
         TextColor3 = spotifyDim,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
-        ZIndex = 12,
+        ZIndex = 20,
     })
 
     local ProgressTimeRight = mk("TextLabel", {
@@ -17035,7 +17111,7 @@ end
         Position = UDim2.new(0, 14, 0, 351),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ZIndex = 12,
+        ZIndex = 20,
     })
 
     local function createIconButton(parent, size, imageId, imageColor, bgColor, rounded)
@@ -17098,13 +17174,11 @@ end
     MoreBtn.Position = UDim2.new(0.94, 0, 0.5, 0)
 
     local SongsCard = mk("Frame", {
-        Parent = SpotifyShell,
-        Size = UDim2.new(1, 0, 0, 0),
+        Parent = CatalogPage,
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundColor3 = spotifyPanel,
-        BackgroundTransparency = 0.88,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        LayoutOrder = 2,
-        AutomaticSize = Enum.AutomaticSize.Y,
         ZIndex = 11,
     })
     corner(SongsCard, 16)
@@ -17118,48 +17192,78 @@ end
         PaddingBottom = UDim.new(0, 10),
     })
 
-    local SongsLayout = mk("UIListLayout", {
-        Parent = SongsCard,
-        Padding = UDim.new(0, 6),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-    })
-
     local SongsTitle = mk("TextLabel", {
         Parent = SongsCard,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 24),
+        Position = UDim2.new(0, 12, 0, 8),
         BackgroundTransparency = 1,
-        LayoutOrder = 1,
         Text = "Canciones",
         Font = Enum.Font.GothamBlack,
-        TextSize = 22,
+        TextSize = 20,
         TextColor3 = spotifyText,
         TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 12,
+        ZIndex = 20,
     })
 
     local CatalogStatus = mk("TextLabel", {
         Parent = SongsCard,
-        Size = UDim2.new(1, 0, 0, 32),
+        Size = UDim2.new(1, -24, 0, 20),
+        Position = UDim2.new(0, 12, 0, 34),
         BackgroundTransparency = 1,
-        LayoutOrder = 2,
         Text = "Cargando catálogo...",
         Font = Enum.Font.GothamMedium,
-        TextSize = 12,
+        TextSize = 11,
         TextWrapped = true,
-        TextYAlignment = Enum.TextYAlignment.Top,
+        TextYAlignment = Enum.TextYAlignment.Center,
         TextColor3 = spotifyDim,
         TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 12,
+        ZIndex = 20,
     })
+
+    local AllSongsButton = mk("TextButton", {
+        Parent = SongsCard,
+        Size = UDim2.new(0.5, -7, 0, 28),
+        Position = UDim2.new(0, 12, 0, 58),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.05,
+        BorderSizePixel = 0,
+        Text = "Todas",
+        TextColor3 = getContrastColor(Theme.Accent),
+        Font = Enum.Font.GothamBold,
+        TextSize = 11,
+        AutoButtonColor = false,
+        ZIndex = 20,
+    })
+    corner(AllSongsButton, 9)
+
+    local FavoritesButton = mk("TextButton", {
+        Parent = SongsCard,
+        Size = UDim2.new(0.5, -7, 0, 28),
+        Position = UDim2.new(0.5, 2, 0, 58),
+        BackgroundColor3 = Theme.Secondary,
+        BackgroundTransparency = 0.10,
+        BorderSizePixel = 0,
+        Text = "Favoritos",
+        TextColor3 = spotifyDim,
+        Font = Enum.Font.GothamBold,
+        TextSize = 11,
+        AutoButtonColor = false,
+        ZIndex = 20,
+    })
+    corner(FavoritesButton, 9)
+    AllSongsButton:SetAttribute("ThemeRole", "Accent")
+    AllSongsButton:SetAttribute("ThemeTextRole", "Text")
+    FavoritesButton:SetAttribute("ThemeRole", "Secondary")
+    FavoritesButton:SetAttribute("ThemeTextRole", "TextDim")
 
     local SongSearchHolder = mk("Frame", {
         Parent = SongsCard,
-        Size = UDim2.new(1, 0, 0, 30),
+        Size = UDim2.new(1, -24, 0, 30),
+        Position = UDim2.new(0, 12, 0, 94),
         BackgroundColor3 = Color3.fromRGB(22, 22, 26),
         BackgroundTransparency = 0.10,
         BorderSizePixel = 0,
-        LayoutOrder = 3,
-        ZIndex = 12,
+        ZIndex = 20,
     })
     corner(SongSearchHolder, 12)
     stroke(SongSearchHolder, Color3.fromRGB(75, 75, 82), 1, 0.55)
@@ -17172,7 +17276,7 @@ end
         Image = asset(100388562921803),
         ImageColor3 = spotifyDim,
         AutoButtonColor = false,
-        ZIndex = 13,
+        ZIndex = 21,
     })
 
     local SongSearchBox = mk("TextBox", {
@@ -17188,7 +17292,7 @@ end
         TextSize = 13,
         Font = Enum.Font.GothamMedium,
         TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 13,
+        ZIndex = 21,
     })
 
     SongSearchIcon.Activated:Connect(function()
@@ -17197,15 +17301,19 @@ end
         end)
     end)
 
-    SongList = mk("Frame", {
+    SongList = mk("ScrollingFrame", {
         Parent = SongsCard,
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, -24, 1, -136),
+        Position = UDim2.new(0, 12, 0, 130),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        LayoutOrder = 4,
-        AutomaticSize = Enum.AutomaticSize.Y,
-        ClipsDescendants = false,
-        ZIndex = 11,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ScrollingEnabled = true,
+        ScrollBarThickness = 2,
+        ClipsDescendants = true,
+        ZIndex = 19,
     })
 
     SongListLayout = mk("UIListLayout", {
@@ -17228,6 +17336,30 @@ end
     local clearSongRows
     local createSongRow
 
+    local function refreshSpotifyCatalogMode()
+        local favorites = SpotifyState.FavoritesView == true
+        SongsTitle.Text = favorites and "Favoritos" or "Canciones"
+        AllSongsButton.BackgroundColor3 = favorites and Theme.Secondary or Theme.Accent
+        AllSongsButton.BackgroundTransparency = favorites and 0.10 or 0.05
+        AllSongsButton.TextColor3 = favorites and spotifyDim or getContrastColor(Theme.Accent)
+        FavoritesButton.BackgroundColor3 = favorites and Theme.Accent or Theme.Secondary
+        FavoritesButton.BackgroundTransparency = favorites and 0.05 or 0.10
+        FavoritesButton.TextColor3 = favorites and getContrastColor(Theme.Accent) or spotifyDim
+        if SpotifyState.CatalogLoaded then
+            renderSongRows()
+        end
+    end
+
+    AllSongsButton.Activated:Connect(function()
+        SpotifyState.FavoritesView = false
+        refreshSpotifyCatalogMode()
+    end)
+
+    FavoritesButton.Activated:Connect(function()
+        SpotifyState.FavoritesView = true
+        refreshSpotifyCatalogMode()
+    end)
+
     SongSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
         SpotifyState.SearchQuery = SongSearchBox.Text or ""
         if renderSongRows then
@@ -17242,77 +17374,53 @@ end
 
     local function applySpotifyNowPlayingLayout()
         local m = getSpotifyMetrics()
+        local albumSz = m.compact and 118 or 132
+        local cardW = 0
+        pcall(function() cardW = NowPlayingCard.AbsoluteSize.X end)
+        local compactCard = cardW > 0 and cardW < 640
+        if compactCard then
+            albumSz = math.min(albumSz, 118)
+        end
 
-        -- Layout vertical en CADENA: cada bloque se posiciona en base al final
-        -- del bloque anterior, así que imagen / info / progreso / tiempos /
-        -- controles NUNCA pueden superponerse, sin importar el modo (compacto
-        -- o normal) ni si se agranda la imagen del álbum en el futuro.
-        local albumSz = m.compact and 152 or 176
-        local albumTop = m.compact and 12 or 14
-        local infoGap = m.compact and 16 or 22
-        local infoTop = albumTop + albumSz + infoGap
-        local infoHeight = 80
-        local progressGap = m.compact and 10 or 14
-        local progressTop = infoTop + infoHeight + progressGap
-        local progressTrackH = 5
-        local timeGap = m.compact and 6 or 8
-        local timeTop = progressTop + progressTrackH + timeGap
-        local timeH = 16
-        local controlsGap = m.compact and 12 or 16
-        local controlsTop = timeTop + timeH + controlsGap
-        local controlsH = m.compact and 44 or 48
-        local bottomPad = m.compact and 12 or 14
-        local cardH = controlsTop + controlsH + bottomPad
-
-        NowPlayingCard.Size = UDim2.new(1, 0, 0, cardH)
+        NowPlayingCard.Size = UDim2.new(1, 0, 1, 0)
 
         AlbumArt.Size = UDim2.new(0, albumSz, 0, albumSz)
-        AlbumArt.Position = UDim2.new(0.5, -(albumSz / 2), 0, albumTop)
+        AlbumArt.Position = UDim2.new(0.5, -(albumSz / 2), 0, 12)
 
-        InfoFrame.Size = UDim2.new(1, -28, 0, infoHeight)
-        InfoFrame.Position = UDim2.new(0, 14, 0, infoTop)
+        InfoFrame.Size = UDim2.new(1, -28, 0, 62)
+        InfoFrame.Position = UDim2.new(0, 14, 0, albumSz + 22)
 
-        PlayerSongTitle.TextSize = m.compact and 20 or 22
-        PlayerSongArtist.Position = UDim2.new(0, 0, 0, 32)
-        PlayerSongArtist.TextSize = m.compact and 13 or 14
-        PlayerMeta.Position = UDim2.new(0, 0, 0, 56)
-        PlayerMeta.TextSize = m.compact and 10 or 11
+        PlayerSongTitle.TextSize = compactCard and 19 or 21
+        PlayerSongArtist.Position = UDim2.new(0, 0, 0, 27)
+        PlayerSongArtist.TextSize = compactCard and 12 or 13
+        PlayerMeta.Position = UDim2.new(0, 0, 0, 46)
+        PlayerMeta.TextSize = 10
 
+        local progressTop = albumSz + 96
         ProgressTrack.Position = UDim2.new(0, 14, 0, progressTop)
-        SeekHitbox.Position = UDim2.new(0, 14, 0, progressTop - 14)  -- zona touch centrada sobre la barra
-        ProgressTimeLeft.Position = UDim2.new(0, 14, 0, timeTop)
-        ProgressTimeRight.Position = UDim2.new(1, -86, 0, timeTop)
-        ProgressTimeLeft.TextSize = m.compact and 11 or 12
-        ProgressTimeRight.TextSize = m.compact and 11 or 12
+        SeekHitbox.Position = UDim2.new(0, 14, 0, progressTop - 14)
+        ProgressTimeLeft.Position = UDim2.new(0, 14, 0, progressTop + 11)
+        ProgressTimeRight.Position = UDim2.new(1, -86, 0, progressTop + 11)
+        ProgressTimeLeft.TextSize = 11
+        ProgressTimeRight.TextSize = 11
 
-        Controls.Size = UDim2.new(1, -28, 0, controlsH)
-        Controls.Position = UDim2.new(0, 14, 0, controlsTop)
+        Controls.Size = UDim2.new(1, -28, 0, 44)
+        Controls.Position = UDim2.new(0, 14, 0, progressTop + 34)
 
-        RepeatBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-        LikeBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-        PlayPauseBtnOuter.AnchorPoint = Vector2.new(0.5, 0.5)
-        NextBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-        MoreBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-
-        RepeatBtn.Size = UDim2.new(0, m.compact and 20 or 22, 0, m.compact and 20 or 22)
+        RepeatBtn.Size = UDim2.new(0, 20, 0, 20)
         RepeatBtn.Position = UDim2.new(0.06, 0, 0.5, 0)
-
-        LikeBtn.Size = UDim2.new(0, m.compact and 22 or 24, 0, m.compact and 22 or 24)
+        LikeBtn.Size = UDim2.new(0, 22, 0, 22)
         LikeBtn.Position = UDim2.new(0.22, 0, 0.5, 0)
 
-        PlayPauseBtnOuter.Size = UDim2.new(0, m.compact and 38 or 44, 0, m.compact and 38 or 44)
+        PlayPauseBtnOuter.Size = UDim2.new(0, 40, 0, 40)
         PlayPauseBtnOuter.Position = UDim2.new(0.50, 0, 0.5, 0)
-        PlayPauseBtn.Size = UDim2.new(0, m.compact and 18 or 22, 0, m.compact and 18 or 22)
-        PlayPauseBtn.Position = UDim2.new(0.5, m.compact and -9 or -11, 0.5, m.compact and -9 or -11)
+        PlayPauseBtn.Size = UDim2.new(0, 18, 0, 18)
+        PlayPauseBtn.Position = UDim2.new(0.5, -9, 0.5, -9)
 
-        NextBtn.Size = UDim2.new(0, m.compact and 22 or 24, 0, m.compact and 22 or 24)
+        NextBtn.Size = UDim2.new(0, 22, 0, 22)
         NextBtn.Position = UDim2.new(0.78, 0, 0.5, 0)
-
-        MoreBtn.Size = UDim2.new(0, m.compact and 20 or 22, 0, m.compact and 20 or 22)
+        MoreBtn.Size = UDim2.new(0, 20, 0, 20)
         MoreBtn.Position = UDim2.new(0.94, 0, 0.5, 0)
-
-        SongsTitle.TextSize = m.compact and 20 or 22
-        CatalogStatus.TextSize = m.compact and 11 or 12
     end
 
     local function applySpotifyRowLayout(rowData)
@@ -17454,7 +17562,7 @@ end
     end
 
     local function refreshAllRows()
-        for i, rowData in ipairs(SpotifyState.RowButtons) do
+        for i, rowData in pairs(SpotifyState.RowButtons) do
             updateTrackRow(rowData, i)
         end
     end
@@ -17483,8 +17591,21 @@ end
             return
         end
 
-        AlbumArt.Image = track.Cover
-        AlbumFallback.Visible = (track.Cover == nil or trim(track.Cover) == "")
+        local seed = tostring(track.Id or track.Name or index or "spotify")
+        local hash = 0
+        for i = 1, #seed do
+            hash = (hash * 31 + string.byte(seed, i)) % 360
+        end
+        local fallbackColor = Color3.fromHSV(hash / 360, 0.52, 0.28)
+        local hasCover = trim(track.Cover or "") ~= ""
+
+        NowPlayingBackdrop.Image = hasCover and track.Cover or ""
+        NowPlayingBackdrop.ImageTransparency = hasCover and 0.55 or 1
+        NowPlayingBackdrop.BackgroundColor3 = hasCover and Color3.fromRGB(8, 8, 10) or fallbackColor
+        NowPlayingBackdrop.BackgroundTransparency = hasCover and 0.12 or 0.06
+        NowPlayingShade.BackgroundTransparency = hasCover and 0.52 or 0.30
+        AlbumArt.BackgroundColor3 = hasCover and Theme.Background or fallbackColor
+        AlbumFallback.Visible = not hasCover
 
         PlayerSongTitle.Text = track.Name
         PlayerSongArtist.Text = track.Artist
@@ -18434,6 +18555,8 @@ clearSongRows = function()
         updateSpotifyCanvas()
     end
 
+    SpotifyPages:JumpTo(PlayerPage)
+    refreshSpotifyCatalogMode()
     syncPlaybackUI()
     pcall(refreshSpotifyUILayout)
     updateSongListCanvas()
