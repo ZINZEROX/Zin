@@ -414,6 +414,7 @@ local SavedConfig = {
     Volume = 0.5,
     HideSliders = false,
     Favorites = "",
+    SpotifyFavorites = {},
     SelectedLogoIcon = "ClassicYinYang",
     PlatformMode = "Auto",   -- "Auto" | "PC" | "Mobile"
     FloatingToggleStyle = "Pill",  -- "Pill" (rectangular actual) | "Circle" (nuevo, redondo)
@@ -439,6 +440,7 @@ local function SaveConfig()
             "libHeight:" .. tostring(SavedConfig.LibraryHeight or 340),
             "hideSliders:" .. tostring(SavedConfig.HideSliders or false),
             "favorites:" .. tostring(SavedConfig.Favorites or ""),
+            "spotifyFavorites:" .. HttpService:JSONEncode(SavedConfig.SpotifyFavorites or {}),
             "logoIcon:" .. tostring(SavedConfig.SelectedLogoIcon or "ClassicYinYang"),
             "platformMode:" .. tostring(SavedConfig.PlatformMode or "Auto"),
             "floatStyle:" .. tostring(SavedConfig.FloatingToggleStyle or "Pill"),
@@ -459,6 +461,7 @@ local function LoadConfig()
         libHeight = nil,
         hideSliders = nil,
         favorites = nil,
+        spotifyFavorites = nil,
         logoIcon = nil,
         platformMode = nil,
         floatStyle = nil,
@@ -486,6 +489,13 @@ local function LoadConfig()
                         result.hideSliders = (value == "true")
                     elseif key == "favorites" then
                         result.favorites = value
+                    elseif key == "spotifyFavorites" then
+                        local okFavorites, decodedFavorites = pcall(function()
+                            return HttpService:JSONDecode(value)
+                        end)
+                        if okFavorites and type(decodedFavorites) == "table" then
+                            result.spotifyFavorites = decodedFavorites
+                        end
                     elseif key == "logoIcon" then
                         result.logoIcon = value
                     elseif key == "platformMode" then
@@ -1995,6 +2005,9 @@ function YinYang:CreateWindow(title_text, startTheme)
         end
         if ConfigCargada.favorites then
             SavedConfig.Favorites = ConfigCargada.favorites
+        end
+        if type(ConfigCargada.spotifyFavorites) == "table" then
+            SavedConfig.SpotifyFavorites = ConfigCargada.spotifyFavorites
         end
         if ConfigCargada.logoIcon then
             SavedConfig.SelectedLogoIcon = ConfigCargada.logoIcon
@@ -16777,7 +16790,7 @@ end
         TweenTime = 0.28,
         EasingStyle = Enum.EasingStyle.Quart,
         EasingDirection = Enum.EasingDirection.Out,
-        TouchInputEnabled = true,
+        TouchInputEnabled = false,
         GamepadInputEnabled = false,
         ScrollWheelInputEnabled = false,
         Circular = false,
@@ -17000,7 +17013,7 @@ end
     corner(ProgressFill, 999)
 
     --// ZONA CLICKABLE sobre la barra de progreso (más alta para facilitar el toque)
-    local SeekHitbox = mk("TextButton", {
+    SeekHitbox = mk("TextButton", {
         Parent = NowPlayingCard,
         Size = UDim2.new(1, -28, 0, 28),
         Position = UDim2.new(0, 14, 0, 295),  -- zona touch amplia centrada sobre ProgressTrack
@@ -17010,8 +17023,74 @@ end
         ZIndex = 22,
     })
 
-    local isSeeking = false
+    isSeeking = false
     local seekInput = nil
+
+    --// Swipe horizontal manual: evita que el ScrollingFrame vertical robe sensibilidad al cambio de página.
+    local spotifySwipe = {
+        input = nil,
+        start = nil,
+        moved = false,
+        threshold = 24,
+    }
+
+    track(UserInputService.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+        local pos = SpotifyShell.AbsolutePosition
+        local size = SpotifyShell.AbsoluteSize
+        if input.Position.X < pos.X or input.Position.X > pos.X + size.X
+            or input.Position.Y < pos.Y or input.Position.Y > pos.Y + size.Y then
+            return
+        end
+        local seekPos = SeekHitbox.AbsolutePosition
+        local seekSize = SeekHitbox.AbsoluteSize
+        if input.Position.X >= seekPos.X and input.Position.X <= seekPos.X + seekSize.X
+            and input.Position.Y >= seekPos.Y and input.Position.Y <= seekPos.Y + seekSize.Y then
+            return
+        end
+        spotifySwipe.input = input
+        spotifySwipe.start = input.Position
+        spotifySwipe.moved = false
+    end))
+
+    track(UserInputService.InputChanged:Connect(function(input)
+        if not spotifySwipe.input or not spotifySwipe.start then
+            return
+        end
+        if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then
+            return
+        end
+        local delta = input.Position - spotifySwipe.start
+        if math.abs(delta.X) >= spotifySwipe.threshold and math.abs(delta.X) > math.abs(delta.Y) * 1.15 then
+            spotifySwipe.moved = true
+        end
+    end))
+
+    track(UserInputService.InputEnded:Connect(function(input)
+        if not spotifySwipe.input or not spotifySwipe.start then
+            return
+        end
+        if input ~= spotifySwipe.input and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+
+        local delta = input.Position - spotifySwipe.start
+        local horizontal = math.abs(delta.X)
+        local vertical = math.abs(delta.Y)
+        if not isSeeking and (spotifySwipe.moved or (horizontal >= spotifySwipe.threshold and horizontal > vertical * 1.15)) then
+            if delta.X < 0 then
+                SpotifyPages:Next()
+            else
+                SpotifyPages:Previous()
+            end
+        end
+
+        spotifySwipe.input = nil
+        spotifySwipe.start = nil
+        spotifySwipe.moved = false
+    end))
 
     local function getSeekPercent(inputX)
         local trackPos = ProgressTrack.AbsolutePosition.X
@@ -17511,6 +17590,31 @@ end
         return SpotifyState.CurrentLiked[index] == true
     end
 
+    local function loadSpotifyFavorites()
+        SpotifyState.CurrentLiked = {}
+        local savedFavorites = type(SavedConfig.SpotifyFavorites) == "table" and SavedConfig.SpotifyFavorites or {}
+        for index, track in ipairs(SpotifyState.Catalog) do
+            if savedFavorites[tostring(track.Id)] == true then
+                SpotifyState.CurrentLiked[index] = true
+            end
+        end
+    end
+
+    local function saveSpotifyFavorite(index)
+        local track = SpotifyState.Catalog[index]
+        if not track then
+            return
+        end
+        SavedConfig.SpotifyFavorites = type(SavedConfig.SpotifyFavorites) == "table" and SavedConfig.SpotifyFavorites or {}
+        local id = tostring(track.Id)
+        if SpotifyState.CurrentLiked[index] == true then
+            SavedConfig.SpotifyFavorites[id] = true
+        else
+            SavedConfig.SpotifyFavorites[id] = nil
+        end
+        SaveConfig()
+    end
+
     local function updateTrackRow(rowData, index)
         local track = SpotifyState.Catalog[index]
         if not rowData or not rowData.Row or not track then
@@ -17604,6 +17708,7 @@ end
         NowPlayingBackdrop.BackgroundColor3 = hasCover and Color3.fromRGB(8, 8, 10) or fallbackColor
         NowPlayingBackdrop.BackgroundTransparency = hasCover and 0.12 or 0.06
         NowPlayingShade.BackgroundTransparency = hasCover and 0.52 or 0.30
+        AlbumArt.Image = hasCover and track.Cover or ""
         AlbumArt.BackgroundColor3 = hasCover and Theme.Background or fallbackColor
         AlbumFallback.Visible = not hasCover
 
@@ -17813,6 +17918,7 @@ end
 
     local function toggleTrackLike(index)
         SpotifyState.CurrentLiked[index] = not isLiked(index)
+        saveSpotifyFavorite(index)
         renderSongRows()
         syncPlaybackUI()
     end
@@ -18273,7 +18379,7 @@ end
             BackgroundTransparency = 1,
             Text = "",
             AutoButtonColor = false,
-            ZIndex = 12,
+            ZIndex = 15,
         })
         TapArea.Name = "SongTapArea"
 
@@ -18511,6 +18617,7 @@ clearSongRows = function()
         end
 
         CatalogStatus.Text = "Catálogo cargado • " .. tostring(#SpotifyState.Catalog) .. " canciones"
+        loadSpotifyFavorites()
         renderSongRows()
         updateSongListCanvas()
         updateSpotifyCanvas()
