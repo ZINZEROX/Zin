@@ -1,5 +1,4 @@
- --[[
- ========================================================
+ --===========================================
 
 --// ══════════════════════════════════════════════════════════════════════════════
 --// GUÍA: CÓMO CREAR PESTAÑAS CON ASSETS (ICONOS)
@@ -13655,7 +13654,7 @@ end
 
     -- Railway expone este dominio por HTTPS público; el proceso interno escucha en el puerto 8080.
     -- No se agrega :8080 porque ese puerto no está expuesto públicamente en el dominio Railway.
-    local BACKEND_URL = "https://chatglobal.up.railway.app"
+    local BACKEND_URL = "https://https://yin-chat.onrender.com"
     local ChatSyncPollRate = 2  -- segundos entre cada consulta al backend
     local knownServerIds = {}   -- IDs de mensajes de servidor ya renderizados
     local backendConnected = false
@@ -18948,7 +18947,7 @@ end)()
 --// - Para DESACTIVAR: Cambia "DEMO_ACTIVO" a false
 --// ============================================================
 
-local DEMO_ACTIVO = false -- Demo activada
+local DEMO_ACTIVO = true -- Demo activada
 
 if DEMO_ACTIVO then
     task.wait(0.5)
@@ -21117,6 +21116,8 @@ if DEMO_ACTIVO then
                 fireLike()
             elseif inPlay then
                 firePlay()
+            else
+                playTrack(index)
             end
         end)
 
