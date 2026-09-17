@@ -18797,9 +18797,7 @@ local _ZeroAI = (function()
     local LocalPlayer = Players.LocalPlayer
     if not LocalPlayer then return end
 
-    local API_KEY    = "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"
-    local MODEL      = "llama-3.3-70b-versatile"
-    local MAX_TOKENS = 200
+    local AI_BACKEND_URL = "https://yin-chat.onrender.com"
     local PLAYER_NAME = LocalPlayer.Name
 
     local SYSTEM_PROMPT = [[
@@ -18893,54 +18891,65 @@ REGLAS DE RESPUESTA:
         table.insert(history, { role = "user", content = userText })
 
         task.spawn(function()
-            local ok, reply = pcall(function()
-                local body = HttpService:JSONEncode({
-                    model       = MODEL,
-                    messages    = history,
-                    max_tokens  = MAX_TOKENS,
-                    temperature = 0.75,
+            local ok, reply, aiName = pcall(function()
+                local body = HttpService:JSONEncode({ messages = history })
+
+                local aiRequest = (syn and syn.request)
+                    or (http and http.request)
+                    or fluxus_request
+                    or http_request
+                    or request
+
+                if not aiRequest then
+                    error("No HTTP request function available")
+                end
+
+                local res = aiRequest({
+                    Url     = AI_BACKEND_URL .. "/api/ai/chat",
+                    Method  = "POST",
+                    Headers = { ["Content-Type"] = "application/json" },
+                    Body    = body,
                 })
 
-                local res = request({
-                    Url    = "https://api.groq.com/openai/v1/chat/completions",
-                    Method = "POST",
-                    Headers = {
-                        ["Content-Type"]  = "application/json",
-                        ["Authorization"] = "Bearer " .. API_KEY,
-                    },
-                    Body = body,
-                })
+                if not res or res.Success == false then
+                    error("Backend AI unavailable")
+                end
 
                 local data = HttpService:JSONDecode(res.Body)
-                return data.choices[1].message.content
+                if not data.success or not data.reply then
+                    error(data.error or "AI returned no response")
+                end
+
+                return data.reply, data.name or "Yin AI"
             end)
 
             waiting = false
 
             if ok and reply then
                 table.insert(history, { role = "assistant", content = reply })
-                chatMsg("[⚡ Zero]: " .. reply, Color3.fromRGB(140, 120, 255))
+                chatMsg("[" .. tostring(aiName or "Yin AI") .. "]: " .. reply, Color3.fromRGB(140, 120, 255))
             else
-                chatMsg("[⚡ Zero]: Error de conexión.", Color3.fromRGB(220, 80, 80))
+                chatMsg("[Yin AI]: Error de conexión con la IA.", Color3.fromRGB(220, 80, 80))
             end
         end)
     end
 
-    -- Solo escucha mensajes que empiecen con /
+    -- Solo responde al comando /IA, por ejemplo: /IA hola
     LocalPlayer.Chatted:Connect(function(msg)
-        if msg:sub(1, 1) ~= "/" then return end
-        local text = msg:sub(2):match("^%s*(.-)%s*$")
-        if not text or text == "" then return end
+        local text = tostring(msg):match("^[/]IA%s+(.+)$")
+        if not text then return end
+        text = text:match("^%s*(.-)%s*$")
+        if text == "" then return end
         chatMsg("[" .. PLAYER_NAME .. "]: " .. text, Color3.fromRGB(80, 180, 255))
         ask(text)
     end)
 
     -- Mensaje de bienvenida en el chat
     task.delay(1.5, function()
-        chatMsg("[⚡ Zero]: Activa. Escribe /mensaje en el chat para hablarme.", Color3.fromRGB(140, 120, 255))
+        chatMsg("[Yin AI]: Activa. Usa /IA hola para hablar conmigo.", Color3.fromRGB(140, 120, 255))
     end)
 
-    print("✅ Zero AI integrada — usa /mensaje en el chat global")
+    print("Yin AI integrada — usa /IA mensaje en el chat")
 end)()
 
 --// ============================================================
