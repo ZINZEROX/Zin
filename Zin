@@ -15519,15 +15519,20 @@ end
     		local targetUserId = nil
     		local ok, response = pcall(function()
     			return UniversalRequest({
-    				Url = "https://api.roblox.com/users/get-by-username?username=" .. tostring(targetUsername),
-    				Method = "GET",
+    				Url = "https://users.roblox.com/v1/usernames/users",
+    				Method = "POST",
+    				Headers = { ["Content-Type"] = "application/json" },
+    				Body = HttpService:JSONEncode({
+    					usernames = { tostring(targetUsername) },
+    					excludeBannedUsers = false,
+    				}),
     			})
     		end)
     		
     		if ok and response and response.Body then
     			local success, data = pcall(HttpService.JSONDecode, HttpService, response.Body)
-    			if success and data and data.Id then
-    				targetUserId = tonumber(data.Id) or nil
+    			if success and data and data.data and data.data[1] and data.data[1].id then
+    				targetUserId = tonumber(data.data[1].id) or nil
     			end
     		end
     		
