@@ -1,5 +1,5 @@
  --[[
- ========================================================
+ ====================================================
 
 --// ══════════════════════════════════════════════════════════════════════════════
 --// GUÍA: CÓMO CREAR PESTAÑAS CON ASSETS (ICONOS)
@@ -414,6 +414,7 @@ local SavedConfig = {
     Volume = 0.5,
     HideSliders = false,
     Favorites = "",
+    SpotifyFavorites = {},
     SelectedLogoIcon = "ClassicYinYang",
     PlatformMode = "Auto",   -- "Auto" | "PC" | "Mobile"
     FloatingToggleStyle = "Pill",  -- "Pill" (rectangular actual) | "Circle" (nuevo, redondo)
@@ -439,6 +440,7 @@ local function SaveConfig()
             "libHeight:" .. tostring(SavedConfig.LibraryHeight or 340),
             "hideSliders:" .. tostring(SavedConfig.HideSliders or false),
             "favorites:" .. tostring(SavedConfig.Favorites or ""),
+            "spotifyFavorites:" .. HttpService:JSONEncode(SavedConfig.SpotifyFavorites or {}),
             "logoIcon:" .. tostring(SavedConfig.SelectedLogoIcon or "ClassicYinYang"),
             "platformMode:" .. tostring(SavedConfig.PlatformMode or "Auto"),
             "floatStyle:" .. tostring(SavedConfig.FloatingToggleStyle or "Pill"),
@@ -459,6 +461,7 @@ local function LoadConfig()
         libHeight = nil,
         hideSliders = nil,
         favorites = nil,
+        spotifyFavorites = nil,
         logoIcon = nil,
         platformMode = nil,
         floatStyle = nil,
@@ -486,6 +489,13 @@ local function LoadConfig()
                         result.hideSliders = (value == "true")
                     elseif key == "favorites" then
                         result.favorites = value
+                    elseif key == "spotifyFavorites" then
+                        local okFavorites, decodedFavorites = pcall(function()
+                            return HttpService:JSONDecode(value)
+                        end)
+                        if okFavorites and type(decodedFavorites) == "table" then
+                            result.spotifyFavorites = decodedFavorites
+                        end
                     elseif key == "logoIcon" then
                         result.logoIcon = value
                     elseif key == "platformMode" then
@@ -1995,6 +2005,9 @@ function YinYang:CreateWindow(title_text, startTheme)
         end
         if ConfigCargada.favorites then
             SavedConfig.Favorites = ConfigCargada.favorites
+        end
+        if type(ConfigCargada.spotifyFavorites) == "table" then
+            SavedConfig.SpotifyFavorites = ConfigCargada.spotifyFavorites
         end
         if ConfigCargada.logoIcon then
             SavedConfig.SelectedLogoIcon = ConfigCargada.logoIcon
@@ -13642,7 +13655,7 @@ end
 
     -- Railway expone este dominio por HTTPS público; el proceso interno escucha en el puerto 8080.
     -- No se agrega :8080 porque ese puerto no está expuesto públicamente en el dominio Railway.
-    local BACKEND_URL = "https://chatglobal.up.railway.app"
+    local BACKEND_URL = "https://https://yin-chat.onrender.com"
     local ChatSyncPollRate = 2  -- segundos entre cada consulta al backend
     local knownServerIds = {}   -- IDs de mensajes de servidor ya renderizados
     local backendConnected = false
@@ -16425,10 +16438,10 @@ end
 
     SPage.BackgroundColor3 = Theme.Background
     SPage.BackgroundTransparency = 1
-    SPage.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    SPage.AutomaticCanvasSize = Enum.AutomaticSize.None
     SPage.CanvasSize = UDim2.new(0, 0, 0, 0)
-    SPage.ScrollBarThickness = 2
-    SPage.ScrollingEnabled = true
+    SPage.ScrollBarThickness = 0
+    SPage.ScrollingEnabled = false
 
     local SPOTIFY_CATALOG_URL = "https://raw.githubusercontent.com/nbritez672-tech/Yin-music/refs/heads/main/YinYang_Spotify_Catalog.lua"
 
@@ -16565,6 +16578,7 @@ end
         PlaybackSpeed = 1,
         SettingsMenuVisible = false,
         FloatingPlayerVisible = false,
+        FavoritesView = false,
     }
 
     local refreshSpotifyFloatingPlayer = function() end
@@ -16616,8 +16630,16 @@ end
     local function getVisibleRenderOrder()
         local query = normalizeSearchText(SpotifyState.SearchQuery or "")
         local order = getRenderOrder()
+        local filtered = {}
+
+        for _, index in ipairs(order) do
+            if not SpotifyState.FavoritesView or SpotifyState.CurrentLiked[index] == true then
+                filtered[#filtered + 1] = index
+            end
+        end
+
         if query == "" then
-            return order
+            return filtered
         end
 
         local tokens = {}
@@ -16625,8 +16647,11 @@ end
             tokens[#tokens + 1] = token
         end
 
-        local filtered = {}
+        table.clear(filtered)
         for _, index in ipairs(order) do
+            if SpotifyState.FavoritesView and SpotifyState.CurrentLiked[index] ~= true then
+                continue
+            end
             local track = SpotifyState.Catalog[index]
             if track then
                 local haystack = normalizeSearchText((track.Name or "") .. " " .. (track.Artist or "") .. " " .. (track.Duration or ""))
@@ -16695,37 +16720,33 @@ end
 
     local SpotifyRoot = mk("Frame", {
         Parent = SPage,
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         ClipsDescendants = false,
         LayoutOrder = 1,
-        AutomaticSize = Enum.AutomaticSize.Y,
+        AutomaticSize = Enum.AutomaticSize.None,
         ZIndex = 10,
     })
 
     mk("UIPadding", {
         Parent = SpotifyRoot,
-        PaddingTop = UDim.new(0, 8),
-        PaddingLeft = UDim.new(0, 8),
-        PaddingRight = UDim.new(0, 8),
-        PaddingBottom = UDim.new(0, 10),
+        PaddingTop = UDim.new(0, 0),
+        PaddingLeft = UDim.new(0, 0),
+        PaddingRight = UDim.new(0, 0),
+        PaddingBottom = UDim.new(0, 0),
     })
 
     local SpotifyRootLayout = mk("UIListLayout", {
         Parent = SpotifyRoot,
-        Padding = UDim.new(0, 10),
+        Padding = UDim.new(0, 0),
         SortOrder = Enum.SortOrder.LayoutOrder,
     })
 
     local SongList, SongListLayout
 
     local function updateSpotifyCanvas()
-        local contentY = 0
-        pcall(function()
-            contentY = SpotifyRootLayout.AbsoluteContentSize.Y
-        end)
-        SPage.CanvasSize = UDim2.new(0, 0, 0, math.max(0, math.floor(contentY + 20)))
+        SPage.CanvasSize = UDim2.new(0, 0, 0, 0)
     end
 
     local function updateSongListCanvas()
@@ -16743,55 +16764,96 @@ end
         -- En la versión estable la lista se autoexpande por contenido.
         -- Si el layout tarda un frame en reportar tamaño, esta función
         -- solo fuerza una nueva lectura para refrescar el canvas padre.
-        if SongList.AutomaticSize == Enum.AutomaticSize.None then
-            SongList.Size = UDim2.new(1, 0, 0, math.max(0, math.floor(contentY + 8)))
-        end
+        SongList.CanvasSize = UDim2.new(0, 0, 0, math.max(0, math.floor(contentY + 8)))
     end
 
     -- Header eliminado: el título "Spotify • NEW" ya no ocupa espacio extra
 
     local SpotifyShell = mk("Frame", {
         Parent = SpotifyRoot,
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundColor3 = spotifyPanel,
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
         LayoutOrder = 1,
-        ClipsDescendants = false,
-        AutomaticSize = Enum.AutomaticSize.Y,
+        ClipsDescendants = true,
         ZIndex = 10,
     })
     corner(SpotifyShell, 18)
     stroke(SpotifyShell, Color3.fromRGB(90, 90, 96), 1, 0.35)
 
-    mk("UIPadding", {
+    local SpotifyPages = mk("UIPageLayout", {
         Parent = SpotifyShell,
-        PaddingTop = UDim.new(0, 10),
-        PaddingLeft = UDim.new(0, 10),
-        PaddingRight = UDim.new(0, 10),
-        PaddingBottom = UDim.new(0, 10),
+        FillDirection = Enum.FillDirection.Horizontal,
+        SortOrder = Enum.SortOrder.LayoutOrder,
+        Animated = true,
+        TweenTime = 0.28,
+        EasingStyle = Enum.EasingStyle.Quart,
+        EasingDirection = Enum.EasingDirection.Out,
+        TouchInputEnabled = false,
+        GamepadInputEnabled = false,
+        ScrollWheelInputEnabled = false,
+        Circular = false,
     })
 
-    mk("UIListLayout", {
+    local PlayerPage = mk("Frame", {
         Parent = SpotifyShell,
-        Padding = UDim.new(0, 12),
-        SortOrder = Enum.SortOrder.LayoutOrder,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        LayoutOrder = 1,
+        ClipsDescendants = true,
+        ZIndex = 10,
+    })
+
+    local CatalogPage = mk("Frame", {
+        Parent = SpotifyShell,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        LayoutOrder = 2,
+        ClipsDescendants = true,
+        ZIndex = 10,
     })
 
     -- ═══════════════════════════════════════════════════════
     -- CARD REDISEÑADA: Imagen ARRIBA centrada y grande
     -- ═══════════════════════════════════════════════════════
     local NowPlayingCard = mk("Frame", {
-        Parent = SpotifyShell,
-        Size = UDim2.new(1, 0, 0, 413),
+        Parent = PlayerPage,
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundColor3 = spotifyPanel,
-        BackgroundTransparency = 0.88,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
         LayoutOrder = 1,
         ZIndex = 11,
     })
     corner(NowPlayingCard, 16)
     stroke(NowPlayingCard, Color3.fromRGB(90, 90, 96), 1, 0.45)
+
+    local NowPlayingBackdrop = mk("ImageLabel", {
+        Parent = NowPlayingCard,
+        Size = UDim2.new(1, 0, 1, 0),
+        Position = UDim2.new(0, 0, 0, 0),
+        BackgroundColor3 = Theme.Background,
+        BackgroundTransparency = 0.05,
+        BorderSizePixel = 0,
+        Image = "",
+        ImageTransparency = 1,
+        ScaleType = Enum.ScaleType.Crop,
+        ZIndex = 11,
+    })
+    corner(NowPlayingBackdrop, 16)
+
+    local NowPlayingShade = mk("Frame", {
+        Parent = NowPlayingCard,
+        Size = UDim2.new(1, 0, 1, 0),
+        BackgroundColor3 = Color3.fromRGB(0, 0, 0),
+        BackgroundTransparency = 0.45,
+        BorderSizePixel = 0,
+        ZIndex = 12,
+    })
+    corner(NowPlayingShade, 16)
 
     -- Botón "..." en esquina superior derecha
     local MoreTopBtn = mk("ImageButton", {
@@ -16848,7 +16910,7 @@ end
         Position = UDim2.new(0, 14, 0, 212),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ZIndex = 12,
+        ZIndex = 20,
     })
 
     local PlayerSongTitle = mk("TextLabel", {
@@ -16951,18 +17013,84 @@ end
     corner(ProgressFill, 999)
 
     --// ZONA CLICKABLE sobre la barra de progreso (más alta para facilitar el toque)
-    local SeekHitbox = mk("TextButton", {
+    SeekHitbox = mk("TextButton", {
         Parent = NowPlayingCard,
         Size = UDim2.new(1, -28, 0, 28),
         Position = UDim2.new(0, 14, 0, 295),  -- zona touch amplia centrada sobre ProgressTrack
         BackgroundTransparency = 1,
         Text = "",
         AutoButtonColor = false,
-        ZIndex = 14,
+        ZIndex = 22,
     })
 
-    local isSeeking = false
+    isSeeking = false
     local seekInput = nil
+
+    --// Swipe horizontal manual: evita que el ScrollingFrame vertical robe sensibilidad al cambio de página.
+    local spotifySwipe = {
+        input = nil,
+        start = nil,
+        moved = false,
+        threshold = 24,
+    }
+
+    track(UserInputService.InputBegan:Connect(function(input)
+        if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+        local pos = SpotifyShell.AbsolutePosition
+        local size = SpotifyShell.AbsoluteSize
+        if input.Position.X < pos.X or input.Position.X > pos.X + size.X
+            or input.Position.Y < pos.Y or input.Position.Y > pos.Y + size.Y then
+            return
+        end
+        local seekPos = SeekHitbox.AbsolutePosition
+        local seekSize = SeekHitbox.AbsoluteSize
+        if input.Position.X >= seekPos.X and input.Position.X <= seekPos.X + seekSize.X
+            and input.Position.Y >= seekPos.Y and input.Position.Y <= seekPos.Y + seekSize.Y then
+            return
+        end
+        spotifySwipe.input = input
+        spotifySwipe.start = input.Position
+        spotifySwipe.moved = false
+    end))
+
+    track(UserInputService.InputChanged:Connect(function(input)
+        if not spotifySwipe.input or not spotifySwipe.start then
+            return
+        end
+        if input.UserInputType ~= Enum.UserInputType.Touch and input.UserInputType ~= Enum.UserInputType.MouseMovement then
+            return
+        end
+        local delta = input.Position - spotifySwipe.start
+        if math.abs(delta.X) >= spotifySwipe.threshold and math.abs(delta.X) > math.abs(delta.Y) * 1.15 then
+            spotifySwipe.moved = true
+        end
+    end))
+
+    track(UserInputService.InputEnded:Connect(function(input)
+        if not spotifySwipe.input or not spotifySwipe.start then
+            return
+        end
+        if input ~= spotifySwipe.input and input.UserInputType ~= Enum.UserInputType.MouseButton1 then
+            return
+        end
+
+        local delta = input.Position - spotifySwipe.start
+        local horizontal = math.abs(delta.X)
+        local vertical = math.abs(delta.Y)
+        if not isSeeking and (spotifySwipe.moved or (horizontal >= spotifySwipe.threshold and horizontal > vertical * 1.15)) then
+            if delta.X < 0 then
+                SpotifyPages:Next()
+            else
+                SpotifyPages:Previous()
+            end
+        end
+
+        spotifySwipe.input = nil
+        spotifySwipe.start = nil
+        spotifySwipe.moved = false
+    end))
 
     local function getSeekPercent(inputX)
         local trackPos = ProgressTrack.AbsolutePosition.X
@@ -17038,7 +17166,7 @@ end
         TextColor3 = spotifyDim,
         TextXAlignment = Enum.TextXAlignment.Left,
         TextTruncate = Enum.TextTruncate.AtEnd,
-        ZIndex = 12,
+        ZIndex = 20,
     })
 
     local ProgressTimeRight = mk("TextLabel", {
@@ -17062,7 +17190,7 @@ end
         Position = UDim2.new(0, 14, 0, 351),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        ZIndex = 12,
+        ZIndex = 20,
     })
 
     local function createIconButton(parent, size, imageId, imageColor, bgColor, rounded)
@@ -17125,13 +17253,11 @@ end
     MoreBtn.Position = UDim2.new(0.94, 0, 0.5, 0)
 
     local SongsCard = mk("Frame", {
-        Parent = SpotifyShell,
-        Size = UDim2.new(1, 0, 0, 0),
+        Parent = CatalogPage,
+        Size = UDim2.new(1, 0, 1, 0),
         BackgroundColor3 = spotifyPanel,
-        BackgroundTransparency = 0.88,
+        BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        LayoutOrder = 2,
-        AutomaticSize = Enum.AutomaticSize.Y,
         ZIndex = 11,
     })
     corner(SongsCard, 16)
@@ -17145,48 +17271,78 @@ end
         PaddingBottom = UDim.new(0, 10),
     })
 
-    local SongsLayout = mk("UIListLayout", {
-        Parent = SongsCard,
-        Padding = UDim.new(0, 6),
-        SortOrder = Enum.SortOrder.LayoutOrder,
-    })
-
     local SongsTitle = mk("TextLabel", {
         Parent = SongsCard,
-        Size = UDim2.new(1, 0, 0, 22),
+        Size = UDim2.new(1, 0, 0, 24),
+        Position = UDim2.new(0, 12, 0, 8),
         BackgroundTransparency = 1,
-        LayoutOrder = 1,
         Text = "Canciones",
         Font = Enum.Font.GothamBlack,
-        TextSize = 22,
+        TextSize = 20,
         TextColor3 = spotifyText,
         TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 12,
+        ZIndex = 20,
     })
 
     local CatalogStatus = mk("TextLabel", {
         Parent = SongsCard,
-        Size = UDim2.new(1, 0, 0, 32),
+        Size = UDim2.new(1, -24, 0, 20),
+        Position = UDim2.new(0, 12, 0, 34),
         BackgroundTransparency = 1,
-        LayoutOrder = 2,
         Text = "Cargando catálogo...",
         Font = Enum.Font.GothamMedium,
-        TextSize = 12,
+        TextSize = 11,
         TextWrapped = true,
-        TextYAlignment = Enum.TextYAlignment.Top,
+        TextYAlignment = Enum.TextYAlignment.Center,
         TextColor3 = spotifyDim,
         TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 12,
+        ZIndex = 20,
     })
+
+    local AllSongsButton = mk("TextButton", {
+        Parent = SongsCard,
+        Size = UDim2.new(0.5, -7, 0, 28),
+        Position = UDim2.new(0, 12, 0, 58),
+        BackgroundColor3 = Theme.Accent,
+        BackgroundTransparency = 0.05,
+        BorderSizePixel = 0,
+        Text = "Todas",
+        TextColor3 = getContrastColor(Theme.Accent),
+        Font = Enum.Font.GothamBold,
+        TextSize = 11,
+        AutoButtonColor = false,
+        ZIndex = 20,
+    })
+    corner(AllSongsButton, 9)
+
+    local FavoritesButton = mk("TextButton", {
+        Parent = SongsCard,
+        Size = UDim2.new(0.5, -7, 0, 28),
+        Position = UDim2.new(0.5, 2, 0, 58),
+        BackgroundColor3 = Theme.Secondary,
+        BackgroundTransparency = 0.10,
+        BorderSizePixel = 0,
+        Text = "Favoritos",
+        TextColor3 = spotifyDim,
+        Font = Enum.Font.GothamBold,
+        TextSize = 11,
+        AutoButtonColor = false,
+        ZIndex = 20,
+    })
+    corner(FavoritesButton, 9)
+    AllSongsButton:SetAttribute("ThemeRole", "Accent")
+    AllSongsButton:SetAttribute("ThemeTextRole", "Text")
+    FavoritesButton:SetAttribute("ThemeRole", "Secondary")
+    FavoritesButton:SetAttribute("ThemeTextRole", "TextDim")
 
     local SongSearchHolder = mk("Frame", {
         Parent = SongsCard,
-        Size = UDim2.new(1, 0, 0, 30),
+        Size = UDim2.new(1, -24, 0, 30),
+        Position = UDim2.new(0, 12, 0, 94),
         BackgroundColor3 = Color3.fromRGB(22, 22, 26),
         BackgroundTransparency = 0.10,
         BorderSizePixel = 0,
-        LayoutOrder = 3,
-        ZIndex = 12,
+        ZIndex = 20,
     })
     corner(SongSearchHolder, 12)
     stroke(SongSearchHolder, Color3.fromRGB(75, 75, 82), 1, 0.55)
@@ -17199,7 +17355,7 @@ end
         Image = asset(100388562921803),
         ImageColor3 = spotifyDim,
         AutoButtonColor = false,
-        ZIndex = 13,
+        ZIndex = 21,
     })
 
     local SongSearchBox = mk("TextBox", {
@@ -17215,7 +17371,7 @@ end
         TextSize = 13,
         Font = Enum.Font.GothamMedium,
         TextXAlignment = Enum.TextXAlignment.Left,
-        ZIndex = 13,
+        ZIndex = 21,
     })
 
     SongSearchIcon.Activated:Connect(function()
@@ -17224,15 +17380,19 @@ end
         end)
     end)
 
-    SongList = mk("Frame", {
+    SongList = mk("ScrollingFrame", {
         Parent = SongsCard,
-        Size = UDim2.new(1, 0, 0, 0),
+        Size = UDim2.new(1, -24, 1, -136),
+        Position = UDim2.new(0, 12, 0, 130),
         BackgroundTransparency = 1,
         BorderSizePixel = 0,
-        LayoutOrder = 4,
-        AutomaticSize = Enum.AutomaticSize.Y,
-        ClipsDescendants = false,
-        ZIndex = 11,
+        CanvasSize = UDim2.new(0, 0, 0, 0),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        ScrollingDirection = Enum.ScrollingDirection.Y,
+        ScrollingEnabled = true,
+        ScrollBarThickness = 2,
+        ClipsDescendants = true,
+        ZIndex = 19,
     })
 
     SongListLayout = mk("UIListLayout", {
@@ -17255,6 +17415,30 @@ end
     local clearSongRows
     local createSongRow
 
+    local function refreshSpotifyCatalogMode()
+        local favorites = SpotifyState.FavoritesView == true
+        SongsTitle.Text = favorites and "Favoritos" or "Canciones"
+        AllSongsButton.BackgroundColor3 = favorites and Theme.Secondary or Theme.Accent
+        AllSongsButton.BackgroundTransparency = favorites and 0.10 or 0.05
+        AllSongsButton.TextColor3 = favorites and spotifyDim or getContrastColor(Theme.Accent)
+        FavoritesButton.BackgroundColor3 = favorites and Theme.Accent or Theme.Secondary
+        FavoritesButton.BackgroundTransparency = favorites and 0.05 or 0.10
+        FavoritesButton.TextColor3 = favorites and getContrastColor(Theme.Accent) or spotifyDim
+        if SpotifyState.CatalogLoaded then
+            renderSongRows()
+        end
+    end
+
+    AllSongsButton.Activated:Connect(function()
+        SpotifyState.FavoritesView = false
+        refreshSpotifyCatalogMode()
+    end)
+
+    FavoritesButton.Activated:Connect(function()
+        SpotifyState.FavoritesView = true
+        refreshSpotifyCatalogMode()
+    end)
+
     SongSearchBox:GetPropertyChangedSignal("Text"):Connect(function()
         SpotifyState.SearchQuery = SongSearchBox.Text or ""
         if renderSongRows then
@@ -17269,77 +17453,53 @@ end
 
     local function applySpotifyNowPlayingLayout()
         local m = getSpotifyMetrics()
+        local albumSz = m.compact and 118 or 132
+        local cardW = 0
+        pcall(function() cardW = NowPlayingCard.AbsoluteSize.X end)
+        local compactCard = cardW > 0 and cardW < 640
+        if compactCard then
+            albumSz = math.min(albumSz, 118)
+        end
 
-        -- Layout vertical en CADENA: cada bloque se posiciona en base al final
-        -- del bloque anterior, así que imagen / info / progreso / tiempos /
-        -- controles NUNCA pueden superponerse, sin importar el modo (compacto
-        -- o normal) ni si se agranda la imagen del álbum en el futuro.
-        local albumSz = m.compact and 152 or 176
-        local albumTop = m.compact and 12 or 14
-        local infoGap = m.compact and 16 or 22
-        local infoTop = albumTop + albumSz + infoGap
-        local infoHeight = 80
-        local progressGap = m.compact and 10 or 14
-        local progressTop = infoTop + infoHeight + progressGap
-        local progressTrackH = 5
-        local timeGap = m.compact and 6 or 8
-        local timeTop = progressTop + progressTrackH + timeGap
-        local timeH = 16
-        local controlsGap = m.compact and 12 or 16
-        local controlsTop = timeTop + timeH + controlsGap
-        local controlsH = m.compact and 44 or 48
-        local bottomPad = m.compact and 12 or 14
-        local cardH = controlsTop + controlsH + bottomPad
-
-        NowPlayingCard.Size = UDim2.new(1, 0, 0, cardH)
+        NowPlayingCard.Size = UDim2.new(1, 0, 1, 0)
 
         AlbumArt.Size = UDim2.new(0, albumSz, 0, albumSz)
-        AlbumArt.Position = UDim2.new(0.5, -(albumSz / 2), 0, albumTop)
+        AlbumArt.Position = UDim2.new(0.5, -(albumSz / 2), 0, 12)
 
-        InfoFrame.Size = UDim2.new(1, -28, 0, infoHeight)
-        InfoFrame.Position = UDim2.new(0, 14, 0, infoTop)
+        InfoFrame.Size = UDim2.new(1, -28, 0, 62)
+        InfoFrame.Position = UDim2.new(0, 14, 0, albumSz + 22)
 
-        PlayerSongTitle.TextSize = m.compact and 20 or 22
-        PlayerSongArtist.Position = UDim2.new(0, 0, 0, 32)
-        PlayerSongArtist.TextSize = m.compact and 13 or 14
-        PlayerMeta.Position = UDim2.new(0, 0, 0, 56)
-        PlayerMeta.TextSize = m.compact and 10 or 11
+        PlayerSongTitle.TextSize = compactCard and 19 or 21
+        PlayerSongArtist.Position = UDim2.new(0, 0, 0, 27)
+        PlayerSongArtist.TextSize = compactCard and 12 or 13
+        PlayerMeta.Position = UDim2.new(0, 0, 0, 46)
+        PlayerMeta.TextSize = 10
 
+        local progressTop = albumSz + 96
         ProgressTrack.Position = UDim2.new(0, 14, 0, progressTop)
-        SeekHitbox.Position = UDim2.new(0, 14, 0, progressTop - 14)  -- zona touch centrada sobre la barra
-        ProgressTimeLeft.Position = UDim2.new(0, 14, 0, timeTop)
-        ProgressTimeRight.Position = UDim2.new(1, -86, 0, timeTop)
-        ProgressTimeLeft.TextSize = m.compact and 11 or 12
-        ProgressTimeRight.TextSize = m.compact and 11 or 12
+        SeekHitbox.Position = UDim2.new(0, 14, 0, progressTop - 14)
+        ProgressTimeLeft.Position = UDim2.new(0, 14, 0, progressTop + 11)
+        ProgressTimeRight.Position = UDim2.new(1, -86, 0, progressTop + 11)
+        ProgressTimeLeft.TextSize = 11
+        ProgressTimeRight.TextSize = 11
 
-        Controls.Size = UDim2.new(1, -28, 0, controlsH)
-        Controls.Position = UDim2.new(0, 14, 0, controlsTop)
+        Controls.Size = UDim2.new(1, -28, 0, 44)
+        Controls.Position = UDim2.new(0, 14, 0, progressTop + 34)
 
-        RepeatBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-        LikeBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-        PlayPauseBtnOuter.AnchorPoint = Vector2.new(0.5, 0.5)
-        NextBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-        MoreBtn.AnchorPoint = Vector2.new(0.5, 0.5)
-
-        RepeatBtn.Size = UDim2.new(0, m.compact and 20 or 22, 0, m.compact and 20 or 22)
+        RepeatBtn.Size = UDim2.new(0, 20, 0, 20)
         RepeatBtn.Position = UDim2.new(0.06, 0, 0.5, 0)
-
-        LikeBtn.Size = UDim2.new(0, m.compact and 22 or 24, 0, m.compact and 22 or 24)
+        LikeBtn.Size = UDim2.new(0, 22, 0, 22)
         LikeBtn.Position = UDim2.new(0.22, 0, 0.5, 0)
 
-        PlayPauseBtnOuter.Size = UDim2.new(0, m.compact and 38 or 44, 0, m.compact and 38 or 44)
+        PlayPauseBtnOuter.Size = UDim2.new(0, 40, 0, 40)
         PlayPauseBtnOuter.Position = UDim2.new(0.50, 0, 0.5, 0)
-        PlayPauseBtn.Size = UDim2.new(0, m.compact and 18 or 22, 0, m.compact and 18 or 22)
-        PlayPauseBtn.Position = UDim2.new(0.5, m.compact and -9 or -11, 0.5, m.compact and -9 or -11)
+        PlayPauseBtn.Size = UDim2.new(0, 18, 0, 18)
+        PlayPauseBtn.Position = UDim2.new(0.5, -9, 0.5, -9)
 
-        NextBtn.Size = UDim2.new(0, m.compact and 22 or 24, 0, m.compact and 22 or 24)
+        NextBtn.Size = UDim2.new(0, 22, 0, 22)
         NextBtn.Position = UDim2.new(0.78, 0, 0.5, 0)
-
-        MoreBtn.Size = UDim2.new(0, m.compact and 20 or 22, 0, m.compact and 20 or 22)
+        MoreBtn.Size = UDim2.new(0, 20, 0, 20)
         MoreBtn.Position = UDim2.new(0.94, 0, 0.5, 0)
-
-        SongsTitle.TextSize = m.compact and 20 or 22
-        CatalogStatus.TextSize = m.compact and 11 or 12
     end
 
     local function applySpotifyRowLayout(rowData)
@@ -17430,6 +17590,31 @@ end
         return SpotifyState.CurrentLiked[index] == true
     end
 
+    local function loadSpotifyFavorites()
+        SpotifyState.CurrentLiked = {}
+        local savedFavorites = type(SavedConfig.SpotifyFavorites) == "table" and SavedConfig.SpotifyFavorites or {}
+        for index, track in ipairs(SpotifyState.Catalog) do
+            if savedFavorites[tostring(track.Id)] == true then
+                SpotifyState.CurrentLiked[index] = true
+            end
+        end
+    end
+
+    local function saveSpotifyFavorite(index)
+        local track = SpotifyState.Catalog[index]
+        if not track then
+            return
+        end
+        SavedConfig.SpotifyFavorites = type(SavedConfig.SpotifyFavorites) == "table" and SavedConfig.SpotifyFavorites or {}
+        local id = tostring(track.Id)
+        if SpotifyState.CurrentLiked[index] == true then
+            SavedConfig.SpotifyFavorites[id] = true
+        else
+            SavedConfig.SpotifyFavorites[id] = nil
+        end
+        SaveConfig()
+    end
+
     local function updateTrackRow(rowData, index)
         local track = SpotifyState.Catalog[index]
         if not rowData or not rowData.Row or not track then
@@ -17481,7 +17666,7 @@ end
     end
 
     local function refreshAllRows()
-        for i, rowData in ipairs(SpotifyState.RowButtons) do
+        for i, rowData in pairs(SpotifyState.RowButtons) do
             updateTrackRow(rowData, i)
         end
     end
@@ -17510,8 +17695,22 @@ end
             return
         end
 
-        AlbumArt.Image = track.Cover
-        AlbumFallback.Visible = (track.Cover == nil or trim(track.Cover) == "")
+        local seed = tostring(track.Id or track.Name or index or "spotify")
+        local hash = 0
+        for i = 1, #seed do
+            hash = (hash * 31 + string.byte(seed, i)) % 360
+        end
+        local fallbackColor = Color3.fromHSV(hash / 360, 0.52, 0.28)
+        local hasCover = trim(track.Cover or "") ~= ""
+
+        NowPlayingBackdrop.Image = hasCover and track.Cover or ""
+        NowPlayingBackdrop.ImageTransparency = hasCover and 0.55 or 1
+        NowPlayingBackdrop.BackgroundColor3 = hasCover and Color3.fromRGB(8, 8, 10) or fallbackColor
+        NowPlayingBackdrop.BackgroundTransparency = hasCover and 0.12 or 0.06
+        NowPlayingShade.BackgroundTransparency = hasCover and 0.52 or 0.30
+        AlbumArt.Image = hasCover and track.Cover or ""
+        AlbumArt.BackgroundColor3 = hasCover and Theme.Background or fallbackColor
+        AlbumFallback.Visible = not hasCover
 
         PlayerSongTitle.Text = track.Name
         PlayerSongArtist.Text = track.Artist
@@ -17719,6 +17918,7 @@ end
 
     local function toggleTrackLike(index)
         SpotifyState.CurrentLiked[index] = not isLiked(index)
+        saveSpotifyFavorite(index)
         renderSongRows()
         syncPlaybackUI()
     end
@@ -18179,7 +18379,7 @@ end
             BackgroundTransparency = 1,
             Text = "",
             AutoButtonColor = false,
-            ZIndex = 12,
+            ZIndex = 15,
         })
         TapArea.Name = "SongTapArea"
 
@@ -18417,6 +18617,7 @@ clearSongRows = function()
         end
 
         CatalogStatus.Text = "Catálogo cargado • " .. tostring(#SpotifyState.Catalog) .. " canciones"
+        loadSpotifyFavorites()
         renderSongRows()
         updateSongListCanvas()
         updateSpotifyCanvas()
@@ -18461,6 +18662,8 @@ clearSongRows = function()
         updateSpotifyCanvas()
     end
 
+    SpotifyPages:JumpTo(PlayerPage)
+    refreshSpotifyCatalogMode()
     syncPlaybackUI()
     pcall(refreshSpotifyUILayout)
     updateSongListCanvas()
@@ -20914,6 +21117,8 @@ if DEMO_ACTIVO then
                 fireLike()
             elseif inPlay then
                 firePlay()
+            else
+                playTrack(index)
             end
         end)
 
